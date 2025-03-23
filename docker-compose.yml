@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  wol-web:
+    build: .
+    container_name: netarise
+    restart: unless-stopped
+    ports:
+      - "8085:3000"
+    volumes:
+      - ./devices.csv:/app/devices.csv
+    networks:
+      - wol-network
+
+networks:
+  wol-network:
+    driver: bridge
