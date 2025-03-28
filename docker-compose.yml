@@ -1,17 +1,17 @@
 version: '3'
 
 services:
-  wol-web:
+  netarise:
     build: .
     container_name: netarise
-    restart: unless-stopped
-    ports:
-      - "8085:3000"
+    restart: on-failure
+    command: ["node", "server.js"]
+    network_mode: "host"  # Utilise directement les interfaces réseau de l'hôte
     volumes:
       - ./devices.csv:/app/devices.csv
-    networks:
-      - wol-network
+      - ./logs/netarise.log:/app/logs/netarise.log
+    environment:
+      - INTERFACE=eth0
+      - PORT=8085  # Comme nous utilisons le réseau host, nous définissons le port ici
 
-networks:
-  wol-network:
-    driver: bridge
+# Pas besoin de définir des réseaux quand on utilise network_mode: "host"

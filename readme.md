@@ -1,158 +1,157 @@
-# NetArise - Wake-on-LAN Web Interface
+# NetArise
 
-A web application that allows you to remotely wake computers using Wake-on-LAN. It's designed to run in a Docker container on a Raspberry Pi and provides an easy way to wake your devices from your iPhone or any web browser.
+NetArise est une application web légère permettant de réveiller à distance des ordinateurs via le protocole Wake-on-LAN (WoL). Conçue pour fonctionner dans un conteneur Docker sur un Raspberry Pi, elle offre une interface web simple et des liens directs parfaits pour créer des raccourcis iPhone.
 
-## Features
+## Fonctionnalités
 
-- Responsive web interface accessible from any device
-- Direct URL access for quick waking via bookmarks or iOS shortcuts
-- Add and remove devices directly from the web interface
-- Device list stored in a CSV file
-- Easy iPhone shortcut integration
-- Docker-based for simple deployment
+- Interface web responsive accessible depuis n'importe quel navigateur
+- Gestion simple des appareils (ajout, suppression)
+- Envoi optimisé de paquets Wake-on-LAN
+- Liens directs pour créer des raccourcis sur iPhone ou tout autre appareil
+- Logs détaillés pour le suivi et le dépannage
+- Déploiement facile avec Docker
 
-## Prerequisites
+## Prérequis
 
-- Raspberry Pi (model 3 or newer recommended)
-- Docker and Docker Compose installed on the Raspberry Pi
-- Local network configured to allow Wake-on-LAN magic packets
-- Target computers configured for Wake-on-LAN in their BIOS/UEFI settings
+- Un Raspberry Pi (ou tout autre serveur Linux) avec Docker et Docker Compose installés
+- Une connexion réseau à votre réseau local
+- Des appareils cibles avec Wake-on-LAN activé dans le BIOS/UEFI
 
 ## Installation
 
-1. Clone this repository to your Raspberry Pi:
+1. Clonez ce dépôt sur votre Raspberry Pi :
    ```bash
-   git clone https://github.com/your-username/netarise.git
+   git clone https://github.com/votre-username/netarise.git
    cd netarise
    ```
 
-2. Build and start the Docker container:
+2. Créez les dossiers nécessaires :
+   ```bash
+   mkdir -p logs
+   touch devices.csv
+   ```
+
+3. Construisez et démarrez le conteneur Docker :
    ```bash
    docker-compose up -d
    ```
 
-3. Access the web interface at `http://[raspberry-pi-ip]:8085`
+4. Accédez à l'interface web :
+   ```
+   http://[adresse-ip-raspberry]:8085
+   ```
 
-## Usage
+## Configuration
 
-### Managing Devices
+### Docker Compose
 
-You can manage your devices in two ways:
+Le fichier `docker-compose.yml` configure le conteneur et utilise le mode réseau "host" pour permettre l'envoi de paquets de diffusion :
 
-1. **Web Interface**: Add or remove devices directly through the web interface.
-2. **CSV File**: Edit the `devices.csv` file manually.
+```yaml
+version: '3'
 
-The file format is simple:
-```csv
-name,mac
-Office PC,1a2b3c4d5e6f
-Laptop,2a3b4c5d6e7f
+services:
+  wol-web:
+    build: .
+    container_name: netarise
+    restart: on-failure
+    network_mode: "host"  # Utilise directement les interfaces réseau de l'hôte
+    volumes:
+      - ./devices.csv:/app/devices.csv
+      - ./logs:/app/logs
+    environment:
+      - PORT=8085
 ```
 
-### Waking Devices
+### Configuration de Wake-on-LAN sur Windows
 
-There are two ways to wake your devices:
+Pour que vos ordinateurs Windows répondent aux paquets Wake-on-LAN, configurez les éléments suivants :
 
-1. **Web Interface**: Visit the homepage and click the "Wake" button for the desired device.
-2. **Direct URL**: Use a URL like `http://[raspberry-pi-ip]:8085/wake/[device-name]` to directly wake a specific device.
+1. **Dans le BIOS/UEFI** :
+   - Activez l'option "Wake-on-LAN", "Remote Wake Up" ou similaire
 
-## iPhone Shortcuts Integration
+2. **Dans Windows** :
+   - Ouvrez le Gestionnaire de périphériques
+   - Développez "Cartes réseau"
+   - Sélectionnez votre carte réseau → Propriétés
+   - Dans l'onglet "Gestion de l'alimentation", cochez "Autoriser ce périphérique à sortir l'ordinateur du mode veille"
+   - Dans l'onglet "Avancé", activez les options "Wake on Magic Packet" si disponible
 
-One of the key features is the ability to create iPhone shortcuts that wake your computers with a single tap or voice command. Here's how to set it up:
+3. **Désactivez le démarrage rapide de Windows** :
+   - Panneau de configuration → Options d'alimentation
+   - "Choisir l'action des boutons d'alimentation"
+   - "Modifier des paramètres actuellement non disponibles"
+   - Décochez "Activer le démarrage rapide"
 
-### Creating an iPhone Shortcut
+## Utilisation
 
-1. **Get the Direct Wake URL**:
-   - Open the web interface on your iPhone
-   - Under "Direct Links for Shortcuts", locate your device and copy its URL
-   - The URL should look like: `http://192.168.1.100:8085/wake/Office%20PC`
+### Ajouter des appareils
 
-2. **Create the Shortcut**:
-   - Open the "Shortcuts" app on your iPhone
-   - Tap the "+" button to create a new shortcut
-   - Tap "Add Action"
-   - Search for and select "Get Contents of URL"
-   - Paste the URL you copied
-   - Tap "Next" and give your shortcut a name (e.g., "Wake Office PC")
-   - Optionally, add an icon by tapping the icon in the upper left
-   - Tap "Done" to save the shortcut
+1. Accédez à l'interface web.
+2. Cliquez sur "Ajouter un appareil".
+3. Saisissez un nom pour l'appareil et son adresse MAC.
+4. Cliquez sur "Ajouter".
 
-3. **Add to Home Screen** (optional):
-   - In the Shortcuts app, press and hold on your new shortcut
-   - Select "Share"
-   - Choose "Add to Home Screen"
-   - Confirm to add it to your home screen
+### Réveiller un appareil
 
-4. **Voice Activation** (optional):
-   - You can activate your shortcut with Siri by saying "Hey Siri, Wake Office PC"
-   - Or add a phrase when creating the shortcut by enabling "Show in Share Sheet"
+#### Depuis l'interface web
 
-### Adding to Widgets
+1. Dans la liste des appareils, cliquez sur le bouton "Réveiller" de l'appareil souhaité.
 
-For even quicker access, add your shortcuts to the iOS widgets:
+#### Depuis un raccourci iPhone
 
-1. From your home screen, swipe right to access the widget screen
-2. Scroll down and tap "Edit"
-3. Tap the "+" button in the top left
-4. Find and select "Shortcuts"
-5. Choose a widget size and tap "Add Widget"
-6. Tap the widget to configure it
-7. Select your Wake-on-LAN shortcuts to display
+1. Dans l'application NetArise, section "Liens directs pour raccourcis", copiez l'URL de l'appareil souhaité.
+2. Sur votre iPhone, ouvrez l'app "Raccourcis".
+3. Créez un nouveau raccourci :
+   - Appuyez sur "+" pour ajouter une action
+   - Choisissez "Obtenir le contenu de l'URL"
+   - Collez l'URL copiée
+   - Donnez un nom à votre raccourci
+4. Ajoutez le raccourci à votre écran d'accueil ou aux widgets.
+5. Vous pouvez également l'activer via Siri en disant "Hé Siri, [Nom du raccourci]".
 
-## Configuring Wake-on-LAN on Windows 11
+## Logs et dépannage
 
-For your Windows 11 computer to respond to Wake-on-LAN packets, you need to:
+Les logs sont enregistrés dans le dossier `logs/netarise.log`. Consultez-les pour voir l'activité et identifier les problèmes potentiels :
 
-1. **Enable Wake-on-LAN in BIOS/UEFI**:
-   - Restart your computer and enter BIOS/UEFI (usually F2, F10, DEL, or ESC key)
-   - Look for "Wake-on-LAN", "Remote Wake Up", or similar in power management or network settings
-   - Enable this option and save changes
+```bash
+cat logs/netarise.log
+```
 
-2. **Configure the Network Adapter in Windows 11**:
-   - Open Device Manager
-   - Expand "Network adapters"
-   - Right-click on your network adapter and select "Properties"
-   - Go to the "Power Management" tab
-   - Check "Allow this device to wake the computer"
-   - Also check "Only allow a magic packet to wake the computer"
-   - Go to the "Advanced" tab
-   - Look for and configure these options (if available):
-     - "Wake on Magic Packet" → Enabled
-     - "Wake on pattern match" → Enabled
-     - "Energy Efficient Ethernet" → Disabled
+Pour voir les logs du conteneur en temps réel :
 
-3. **Disable Fast Startup in Windows**:
-   - Open Control Panel
-   - Go to "System and Security" → "Power Options"
-   - Click "Choose what the power button does"
-   - Click "Change settings that are currently unavailable"
-   - Uncheck "Turn on fast startup"
-   - Click "Save changes"
+```bash
+docker-compose logs -f
+```
 
-## External Access (Optional)
+## Architecture technique
 
-To access your interface from outside your local network:
+NetArise utilise :
+- Node.js et Express pour le serveur web
+- Une implémentation directe de socket UDP pour les paquets Wake-on-LAN
+- Un stockage simple en CSV pour la liste des appareils
+- Docker avec mode réseau "host" pour l'accès direct aux interfaces réseau
 
-1. Set up port forwarding on your router
-2. Use a dynamic DNS service like No-IP to have a domain name
-3. Consider adding authentication to the application for security
+## Mises à jour
 
-## Troubleshooting
+Pour mettre à jour NetArise :
 
-If a device doesn't wake up:
-- Verify the MAC address is correct in the CSV file
-- Make sure Wake-on-LAN is properly configured in the BIOS/UEFI
-- Check that your router allows broadcast packets
-- Test with another Wake-on-LAN tool to confirm the device responds
+1. Arrêtez le conteneur :
+   ```bash
+   docker-compose down
+   ```
 
-## Security Considerations
+2. Tirez les dernières modifications :
+   ```bash
+   git pull
+   ```
 
-This application is designed for use on a private, trusted network. When exposing it to the internet:
+3. Reconstruisez et redémarrez :
+   ```bash
+   docker-compose build
+   docker-compose up -d
+   ```
 
-- Add authentication
-- Consider using HTTPS
-- Restrict access using your router's firewall
+## Licence
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Ce projet est sous licence MIT.
