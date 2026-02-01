@@ -2,6 +2,8 @@
 
 NetArise est une application web légère permettant de réveiller à distance des ordinateurs via le protocole Wake-on-LAN (WoL). Conçue pour fonctionner dans un conteneur Docker sur un Raspberry Pi, elle offre une interface web simple et des liens directs parfaits pour créer des raccourcis iPhone.
 
+Test
+
 ## Fonctionnalités
 
 - Interface web responsive accessible depuis n'importe quel navigateur
