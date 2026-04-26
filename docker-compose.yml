@@ -1,17 +1,21 @@
-version: '3'
+version: '3.8'
 
 services:
-  netarise:
+  spark:
     build: .
-    container_name: netarise
-    restart: on-failure
-    command: ["node", "server.js"]
-    network_mode: "host"  # Utilise directement les interfaces réseau de l'hôte
+    container_name: spark
+    restart: unless-stopped
+    network_mode: host
     volumes:
-      - ./devices.csv:/app/devices.csv
-      - ./logs/netarise.log:/app/logs/netarise.log
+      - ./data:/app/data
     environment:
-      - INTERFACE=eth0
-      - PORT=8085  # Comme nous utilisons le réseau host, nous définissons le port ici
-
-# Pas besoin de définir des réseaux quand on utilise network_mode: "host"
+      - PORT=8085
+      - LOG_LEVEL=info
+      - AUTH_USER=${AUTH_USER:-}
+      - AUTH_PASS=${AUTH_PASS:-}
+      - WAKE_RATE_LIMIT=10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

@@ -1,159 +1,147 @@
-# NetArise
+# Spark
 
-NetArise est une application web légère permettant de réveiller à distance des ordinateurs via le protocole Wake-on-LAN (WoL). Conçue pour fonctionner dans un conteneur Docker sur un Raspberry Pi, elle offre une interface web simple et des liens directs parfaits pour créer des raccourcis iPhone.
-
-Test
+Spark est une application web légère qui permet de réveiller des ordinateurs à distance via le protocole Wake-on-LAN (WoL). Conçue pour tourner dans un conteneur Docker (typiquement sur un Raspberry Pi), elle propose une interface PWA installable sur mobile et des liens directs parfaits pour les raccourcis iOS.
 
 ## Fonctionnalités
 
-- Interface web responsive accessible depuis n'importe quel navigateur
-- Gestion simple des appareils (ajout, suppression)
-- Envoi optimisé de paquets Wake-on-LAN
-- Liens directs pour créer des raccourcis sur iPhone ou tout autre appareil
-- Logs détaillés pour le suivi et le dépannage
-- Déploiement facile avec Docker
+- Interface web responsive, installable comme PWA
+- Gestion des appareils (ajout, suppression, description / IP)
+- Envoi de paquets Wake-on-LAN (broadcast UDP port 9)
+- Statut online/offline en temps réel via ping ICMP / TCP probe (si une IP est configurée)
+- Historique des réveils par appareil avec confirmation post-ping
+- Liens directs (`/wake/<nom>`) pour raccourcis iPhone / Siri
+- Authentification Basic optionnelle, rate-limit, CSP via Helmet
+- Stockage SQLite, logs Docker avec rotation automatique
 
 ## Prérequis
 
-- Un Raspberry Pi (ou tout autre serveur Linux) avec Docker et Docker Compose installés
-- Une connexion réseau à votre réseau local
+- Docker et Docker Compose
+- Un réseau local où le broadcast UDP fonctionne (mode `network: host` indispensable)
 - Des appareils cibles avec Wake-on-LAN activé dans le BIOS/UEFI
 
 ## Installation
 
-1. Clonez ce dépôt sur votre Raspberry Pi :
-   ```bash
-   git clone https://github.com/votre-username/netarise.git
-   cd netarise
-   ```
+```bash
+git clone https://github.com/soulkill3r/Spark.git spark
+cd spark
 
-2. Créez les dossiers nécessaires :
-   ```bash
-   mkdir -p logs
-   touch devices.csv
-   ```
+# Crée ton .env (au minimum les credentials)
+cp .env.example .env
+# édite .env
 
-3. Construisez et démarrez le conteneur Docker :
-   ```bash
-   docker-compose up -d
-   ```
+docker-compose up -d --build
+```
 
-4. Accédez à l'interface web :
-   ```
-   http://[adresse-ip-raspberry]:8085
-   ```
+Puis ouvre `http://<ip-de-ton-serveur>:8085` (port défini par `PORT` dans `.env`).
 
 ## Configuration
 
-### Docker Compose
+Toutes les options sont dans [.env.example](.env.example) :
 
-Le fichier `docker-compose.yml` configure le conteneur et utilise le mode réseau "host" pour permettre l'envoi de paquets de diffusion :
+| Variable | Défaut | Rôle |
+|----------|--------|------|
+| `PORT` | `8085` | Port d'écoute |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `AUTH_USER` | (vide) | Utilisateur Basic Auth — si vide, auth désactivée |
+| `AUTH_PASS` | (vide) | Mot de passe Basic Auth |
+| `WAKE_RATE_LIMIT` | `10` | Nombre max de réveils par minute par IP |
 
-```yaml
-version: '3'
+## Migration depuis l'ancienne version (CSV)
 
-services:
-  wol-web:
-    build: .
-    container_name: netarise
-    restart: on-failure
-    network_mode: "host"  # Utilise directement les interfaces réseau de l'hôte
-    volumes:
-      - ./devices.csv:/app/devices.csv
-      - ./logs:/app/logs
-    environment:
-      - PORT=8085
+Si tu viens d'une ancienne installation NetArise avec `devices.csv` :
+
+```bash
+npm install
+npm run migrate
 ```
 
-### Configuration de Wake-on-LAN sur Windows
+Le script lit `devices.csv` et insère les appareils dans `data/spark.db`. Les doublons sont ignorés. Tu peux ensuite supprimer `devices.csv`.
 
-Pour que vos ordinateurs Windows répondent aux paquets Wake-on-LAN, configurez les éléments suivants :
+## Configuration du Wake-on-LAN sur Windows
 
-1. **Dans le BIOS/UEFI** :
-   - Activez l'option "Wake-on-LAN", "Remote Wake Up" ou similaire
-
-2. **Dans Windows** :
-   - Ouvrez le Gestionnaire de périphériques
-   - Développez "Cartes réseau"
-   - Sélectionnez votre carte réseau → Propriétés
-   - Dans l'onglet "Gestion de l'alimentation", cochez "Autoriser ce périphérique à sortir l'ordinateur du mode veille"
-   - Dans l'onglet "Avancé", activez les options "Wake on Magic Packet" si disponible
-
-3. **Désactivez le démarrage rapide de Windows** :
-   - Panneau de configuration → Options d'alimentation
-   - "Choisir l'action des boutons d'alimentation"
-   - "Modifier des paramètres actuellement non disponibles"
-   - Décochez "Activer le démarrage rapide"
+1. **BIOS/UEFI** : activer "Wake-on-LAN", "Power on by PCI-E" ou similaire.
+2. **Gestionnaire de périphériques** → carte réseau → onglet "Gestion de l'alimentation" : cocher *"Autoriser ce périphérique à sortir l'ordinateur du mode veille"* et *"Autoriser uniquement un Magic Packet"*.
+3. **Démarrage rapide** : Panneau de configuration → Options d'alimentation → décocher *"Activer le démarrage rapide"* (sinon Windows hiberne au lieu de s'éteindre, et le WoL ne fonctionne pas après un shutdown).
 
 ## Utilisation
 
-### Ajouter des appareils
+### Ajouter un appareil
 
-1. Accédez à l'interface web.
-2. Cliquez sur "Ajouter un appareil".
-3. Saisissez un nom pour l'appareil et son adresse MAC.
-4. Cliquez sur "Ajouter".
+1. Bouton "Ajouter un appareil"
+2. Saisis nom, MAC (format libre — `XX:XX:XX:XX:XX:XX` ou `XXXXXXXXXXXX`) et optionnellement une IP en description.
+3. Si tu mets une IP, Spark va l'utiliser pour vérifier l'état online/offline et confirmer les réveils via ping/TCP probe.
 
-### Réveiller un appareil
+### Raccourcis iPhone
 
-#### Depuis l'interface web
+Récupère le lien direct dans la section *"Liens directs pour raccourcis"* puis :
 
-1. Dans la liste des appareils, cliquez sur le bouton "Réveiller" de l'appareil souhaité.
+1. App **Raccourcis** → "+"
+2. Ajouter une action **"Obtenir le contenu de l'URL"** → coller l'URL.
+3. Donner un nom au raccourci.
+4. Ajouter à l'écran d'accueil ou activer via Siri.
 
-#### Depuis un raccourci iPhone
+Si tu as activé l'auth, ajoute les credentials dans le raccourci via *"Show More"* → en-tête `Authorization: Basic <base64(user:pass)>`.
 
-1. Dans l'application NetArise, section "Liens directs pour raccourcis", copiez l'URL de l'appareil souhaité.
-2. Sur votre iPhone, ouvrez l'app "Raccourcis".
-3. Créez un nouveau raccourci :
-   - Appuyez sur "+" pour ajouter une action
-   - Choisissez "Obtenir le contenu de l'URL"
-   - Collez l'URL copiée
-   - Donnez un nom à votre raccourci
-4. Ajoutez le raccourci à votre écran d'accueil ou aux widgets.
-5. Vous pouvez également l'activer via Siri en disant "Hé Siri, [Nom du raccourci]".
+## Logs
 
-## Logs et dépannage
-
-Les logs sont enregistrés dans le dossier `logs/netarise.log`. Consultez-les pour voir l'activité et identifier les problèmes potentiels :
+Les logs vont sur `stdout`/`stderr` du conteneur, Docker se charge de la rotation (10 Mo × 5 fichiers).
 
 ```bash
-cat logs/netarise.log
+docker-compose logs -f spark              # live
+docker-compose logs --tail=200 spark      # historique
+docker-compose logs spark 1>/dev/null     # seulement WARN/ERROR
 ```
 
-Pour voir les logs du conteneur en temps réel :
+## Endpoints API
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| GET | `/api/devices` | Liste les appareils |
+| POST | `/api/devices` | Ajoute un appareil — `{ name, mac, description? }` |
+| DELETE | `/api/devices/:mac` | Supprime un appareil |
+| GET | `/api/devices/:id/history` | 20 derniers réveils |
+| GET | `/api/status` | Statut online/offline (basé sur l'IP en description) |
+| POST | `/api/wake/:mac` | Réveille un appareil (réponse JSON) |
+| GET | `/wake/:nom` | Réveille un appareil (réponse HTML, idéal raccourcis) |
+| GET | `/health` | Healthcheck (bypass auth) |
+
+## Architecture
+
+```
+spark/
+├── src/
+│   ├── server.js              # bootstrap Express
+│   ├── config.js              # variables d'env centralisées
+│   ├── middleware/            # auth, rate limit
+│   ├── routes/                # devices, wake, status, health
+│   ├── services/              # db, deviceStore, wolSender, pinger
+│   └── utils/                 # logger, mac, html
+├── public/                    # PWA: index.html, style.css, js/, sw.js, manifest
+├── scripts/migrate-csv-to-sqlite.js
+├── tests/                     # node --test
+├── data/spark.db              # DB SQLite (volume Docker)
+├── Dockerfile                 # multi-stage, user non-root, tini
+└── docker-compose.yml
+```
+
+Stack : Node.js 22, Express 4, better-sqlite3, Helmet, express-rate-limit. Aucun framework côté frontend (vanilla JS modulaire + service worker).
+
+## Développement
 
 ```bash
-docker-compose logs -f
+npm install
+cp .env.example .env
+npm start                  # dev local
+npm test                   # tests (node --test, supertest)
 ```
-
-## Architecture technique
-
-NetArise utilise :
-- Node.js et Express pour le serveur web
-- Une implémentation directe de socket UDP pour les paquets Wake-on-LAN
-- Un stockage simple en CSV pour la liste des appareils
-- Docker avec mode réseau "host" pour l'accès direct aux interfaces réseau
 
 ## Mises à jour
 
-Pour mettre à jour NetArise :
-
-1. Arrêtez le conteneur :
-   ```bash
-   docker-compose down
-   ```
-
-2. Tirez les dernières modifications :
-   ```bash
-   git pull
-   ```
-
-3. Reconstruisez et redémarrez :
-   ```bash
-   docker-compose build
-   docker-compose up -d
-   ```
+```bash
+git pull
+docker-compose up -d --build
+```
 
 ## Licence
 
-Ce projet est sous licence MIT.
+MIT

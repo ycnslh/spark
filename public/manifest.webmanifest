@@ -1,0 +1,18 @@
+{
+  "name": "Spark",
+  "short_name": "Spark",
+  "description": "Wake-on-LAN web interface",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

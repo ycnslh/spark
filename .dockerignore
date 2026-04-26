@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.local
+data
+logs
+*.log
+*.md
+!readme.md
+.DS_Store
+tests
+.github
+.vscode
