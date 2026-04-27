@@ -14,9 +14,16 @@ module.exports = {
     pass: process.env.AUTH_PASS || null,
   },
   logLevel: process.env.LOG_LEVEL || 'info',
+  trustProxy: process.env.TRUST_PROXY
+    ? parseInt(process.env.TRUST_PROXY, 10) || process.env.TRUST_PROXY
+    : 0,
   wakeRateLimit: {
     windowMs: 60 * 1000,
     max: parseInt(process.env.WAKE_RATE_LIMIT, 10) || 10,
+  },
+  authRateLimit: {
+    windowMs: 60 * 1000,
+    max: parseInt(process.env.AUTH_RATE_LIMIT, 10) || 5,
   },
   pingTimeoutMs: 60_000,
   pingIntervalMs: 5_000,

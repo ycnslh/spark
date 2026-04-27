@@ -15,9 +15,13 @@ async function request(url, options = {}) {
 
 export const api = {
   listDevices: () => request('/api/devices'),
-  createDevice: (payload) => request('/api/devices', { method: 'POST', body: JSON.stringify(payload) }),
+  createDevice: (payload) =>
+    request('/api/devices', { method: 'POST', body: JSON.stringify(payload) }),
+  updateDevice: (id, payload) =>
+    request(`/api/devices/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteDevice: (mac) => request(`/api/devices/${encodeURIComponent(mac)}`, { method: 'DELETE' }),
   wakeDevice: (mac) => request(`/api/wake/${encodeURIComponent(mac)}`, { method: 'POST' }),
   getStatus: () => request('/api/status'),
-  getHistory: (id) => request(`/api/devices/${id}/history`),
+  refreshStatus: (id) => request(`/api/status/${id}/refresh`, { method: 'POST' }),
+  getHistory: (id, limit) => request(`/api/devices/${id}/history${limit ? `?limit=${limit}` : ''}`),
 };

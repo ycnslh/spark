@@ -1,11 +1,17 @@
 const net = require('net');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const logger = require('../utils/logger');
 
 const PROBE_PORTS = [22, 3389, 445, 80];
+const HOST_REGEX = /^[a-zA-Z0-9.:_-]{1,253}$/;
+
+function isSafeHost(host) {
+  return typeof host === 'string' && HOST_REGEX.test(host);
+}
 
 function tcpProbe(host, port, timeoutMs = 1000) {
   return new Promise((resolve) => {
+    if (!isSafeHost(host)) return resolve(false);
     const socket = new net.Socket();
     let settled = false;
     const done = (result) => {
@@ -24,11 +30,17 @@ function tcpProbe(host, port, timeoutMs = 1000) {
 
 function icmpPing(host, timeoutMs = 1000) {
   return new Promise((resolve) => {
+    if (!isSafeHost(host)) return resolve(false);
     const flag = process.platform === 'darwin' ? '-t' : '-W';
     const seconds = Math.max(1, Math.round(timeoutMs / 1000));
-    exec(`ping -c 1 ${flag} ${seconds} ${host}`, (error) => {
-      resolve(!error);
-    });
+    execFile(
+      'ping',
+      ['-c', '1', flag, String(seconds), host],
+      { timeout: timeoutMs + 500 },
+      (error) => {
+        resolve(!error);
+      }
+    );
   });
 }
 
@@ -51,4 +63,4 @@ async function pollUntilUp(host, { totalMs, intervalMs }) {
   return false;
 }
 
-module.exports = { isHostUp, pollUntilUp, tcpProbe, icmpPing };
+module.exports = { isHostUp, pollUntilUp, tcpProbe, icmpPing, isSafeHost };

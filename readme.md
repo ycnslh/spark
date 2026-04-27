@@ -38,13 +38,13 @@ Puis ouvre `http://<ip-de-ton-serveur>:8085` (port défini par `PORT` dans `.env
 
 Toutes les options sont dans [.env.example](.env.example) :
 
-| Variable | Défaut | Rôle |
-|----------|--------|------|
-| `PORT` | `8085` | Port d'écoute |
-| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
-| `AUTH_USER` | (vide) | Utilisateur Basic Auth — si vide, auth désactivée |
-| `AUTH_PASS` | (vide) | Mot de passe Basic Auth |
-| `WAKE_RATE_LIMIT` | `10` | Nombre max de réveils par minute par IP |
+| Variable          | Défaut | Rôle                                              |
+| ----------------- | ------ | ------------------------------------------------- |
+| `PORT`            | `8085` | Port d'écoute                                     |
+| `LOG_LEVEL`       | `info` | `debug` / `info` / `warn` / `error`               |
+| `AUTH_USER`       | (vide) | Utilisateur Basic Auth — si vide, auth désactivée |
+| `AUTH_PASS`       | (vide) | Mot de passe Basic Auth                           |
+| `WAKE_RATE_LIMIT` | `10`   | Nombre max de réveils par minute par IP           |
 
 ## Migration depuis l'ancienne version (CSV)
 
@@ -60,8 +60,8 @@ Le script lit `devices.csv` et insère les appareils dans `data/spark.db`. Les d
 ## Configuration du Wake-on-LAN sur Windows
 
 1. **BIOS/UEFI** : activer "Wake-on-LAN", "Power on by PCI-E" ou similaire.
-2. **Gestionnaire de périphériques** → carte réseau → onglet "Gestion de l'alimentation" : cocher *"Autoriser ce périphérique à sortir l'ordinateur du mode veille"* et *"Autoriser uniquement un Magic Packet"*.
-3. **Démarrage rapide** : Panneau de configuration → Options d'alimentation → décocher *"Activer le démarrage rapide"* (sinon Windows hiberne au lieu de s'éteindre, et le WoL ne fonctionne pas après un shutdown).
+2. **Gestionnaire de périphériques** → carte réseau → onglet "Gestion de l'alimentation" : cocher _"Autoriser ce périphérique à sortir l'ordinateur du mode veille"_ et _"Autoriser uniquement un Magic Packet"_.
+3. **Démarrage rapide** : Panneau de configuration → Options d'alimentation → décocher _"Activer le démarrage rapide"_ (sinon Windows hiberne au lieu de s'éteindre, et le WoL ne fonctionne pas après un shutdown).
 
 ## Utilisation
 
@@ -73,14 +73,14 @@ Le script lit `devices.csv` et insère les appareils dans `data/spark.db`. Les d
 
 ### Raccourcis iPhone
 
-Récupère le lien direct dans la section *"Liens directs pour raccourcis"* puis :
+Récupère le lien direct dans la section _"Liens directs pour raccourcis"_ puis :
 
 1. App **Raccourcis** → "+"
 2. Ajouter une action **"Obtenir le contenu de l'URL"** → coller l'URL.
 3. Donner un nom au raccourci.
 4. Ajouter à l'écran d'accueil ou activer via Siri.
 
-Si tu as activé l'auth, ajoute les credentials dans le raccourci via *"Show More"* → en-tête `Authorization: Basic <base64(user:pass)>`.
+Si tu as activé l'auth, ajoute les credentials dans le raccourci via _"Show More"_ → en-tête `Authorization: Basic <base64(user:pass)>`.
 
 ## Logs
 
@@ -94,16 +94,16 @@ docker-compose logs spark 1>/dev/null     # seulement WARN/ERROR
 
 ## Endpoints API
 
-| Méthode | Route | Description |
-|---------|-------|-------------|
-| GET | `/api/devices` | Liste les appareils |
-| POST | `/api/devices` | Ajoute un appareil — `{ name, mac, description? }` |
-| DELETE | `/api/devices/:mac` | Supprime un appareil |
-| GET | `/api/devices/:id/history` | 20 derniers réveils |
-| GET | `/api/status` | Statut online/offline (basé sur l'IP en description) |
-| POST | `/api/wake/:mac` | Réveille un appareil (réponse JSON) |
-| GET | `/wake/:nom` | Réveille un appareil (réponse HTML, idéal raccourcis) |
-| GET | `/health` | Healthcheck (bypass auth) |
+| Méthode | Route                      | Description                                           |
+| ------- | -------------------------- | ----------------------------------------------------- |
+| GET     | `/api/devices`             | Liste les appareils                                   |
+| POST    | `/api/devices`             | Ajoute un appareil — `{ name, mac, description? }`    |
+| DELETE  | `/api/devices/:mac`        | Supprime un appareil                                  |
+| GET     | `/api/devices/:id/history` | 20 derniers réveils                                   |
+| GET     | `/api/status`              | Statut online/offline (basé sur l'IP en description)  |
+| POST    | `/api/wake/:mac`           | Réveille un appareil (réponse JSON)                   |
+| GET     | `/wake/:nom`               | Réveille un appareil (réponse HTML, idéal raccourcis) |
+| GET     | `/health`                  | Healthcheck (bypass auth)                             |
 
 ## Architecture
 

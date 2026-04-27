@@ -1,30 +1,45 @@
-const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
-const currentLevel = LEVELS[(process.env.LOG_LEVEL || 'info').toLowerCase()] || LEVELS.info;
+const pino = require('pino');
 
-function sanitize(value) {
-  if (typeof value !== 'string') value = String(value);
-  return value.replace(/[\r\n]+/g, ' ');
-}
+const isDev = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test';
+const isTest = process.env.NODE_ENV === 'test';
+const level = (process.env.LOG_LEVEL || (isTest ? 'silent' : 'info')).toLowerCase();
 
-function emit(level, message, meta) {
-  if (LEVELS[level] < currentLevel) return;
-  const entry = {
-    time: new Date().toISOString(),
-    level: level.toUpperCase(),
-    msg: sanitize(message),
-    ...(meta ? { meta } : {}),
+const baseOptions = { level, base: { app: 'spark' } };
+
+const transport = isDev
+  ? {
+      transport: {
+        target: 'pino-pretty',
+        options: { translateTime: 'SYS:standard', ignore: 'pid,hostname,app' },
+      },
+    }
+  : {};
+
+const logger = pino({ ...baseOptions, ...transport });
+
+function wrap(method) {
+  return (msg, meta) => {
+    if (meta && typeof meta === 'object') {
+      logger[method](meta, msg);
+    } else {
+      logger[method](msg);
+    }
   };
-  const line = `[${entry.time}] [${entry.level}] ${entry.msg}${meta ? ' ' + JSON.stringify(meta) : ''}`;
-  if (level === 'error' || level === 'warn') {
-    console.error(line);
-  } else {
-    console.log(line);
-  }
 }
 
 module.exports = {
-  debug: (msg, meta) => emit('debug', msg, meta),
-  info: (msg, meta) => emit('info', msg, meta),
-  warn: (msg, meta) => emit('warn', msg, meta),
-  error: (msg, meta) => emit('error', msg, meta),
+  debug: wrap('debug'),
+  info: wrap('info'),
+  warn: wrap('warn'),
+  error: wrap('error'),
+  child: (bindings) => {
+    const c = logger.child(bindings);
+    return {
+      debug: (msg, meta) => (meta ? c.debug(meta, msg) : c.debug(msg)),
+      info: (msg, meta) => (meta ? c.info(meta, msg) : c.info(msg)),
+      warn: (msg, meta) => (meta ? c.warn(meta, msg) : c.warn(msg)),
+      error: (msg, meta) => (meta ? c.error(meta, msg) : c.error(msg)),
+    };
+  },
+  raw: logger,
 };

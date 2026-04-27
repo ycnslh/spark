@@ -1,4 +1,4 @@
-const { test, before, after, beforeEach } = require('node:test');
+const { test, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const fs = require('fs');
@@ -54,4 +54,33 @@ test('recordWake then getHistory returns the entry', () => {
   assert.equal(history.length, 1);
   assert.equal(history[0].success, 1);
   assert.equal(history[0].triggered_by, 'tester');
+});
+
+test('createDevice stores host separately from description', () => {
+  const d = store.createDevice({
+    name: 'srv',
+    mac: 'aa:bb:cc:dd:ee:ff',
+    host: '192.168.1.10',
+    description: 'NAS principal',
+  });
+  assert.equal(d.host, '192.168.1.10');
+  assert.equal(d.description, 'NAS principal');
+});
+
+test('updateDevice modifies only provided fields', () => {
+  const d = store.createDevice({
+    name: 'srv',
+    mac: 'aa:bb:cc:dd:ee:ff',
+    host: '10.0.0.1',
+  });
+  store.updateDevice(d.id, { host: '10.0.0.2' });
+  const after = store.findById(d.id);
+  assert.equal(after.host, '10.0.0.2');
+  assert.equal(after.name, 'srv');
+});
+
+test('nameExists with exceptId allows keeping own name', () => {
+  const d = store.createDevice({ name: 'pc', mac: 'aa:bb:cc:dd:ee:ff' });
+  assert.equal(store.nameExists('pc'), true);
+  assert.equal(store.nameExists('pc', d.id), false);
 });

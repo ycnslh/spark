@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   spark:
     build: .
@@ -7,6 +5,8 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
+      # Persiste la base SQLite entre les redéploiements.
+      # Le dossier ./data est créé sur l'hôte au premier démarrage.
       - ./data:/app/data
     environment:
       - PORT=8085
@@ -17,5 +17,5 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "5"
+        max-size: '10m'
+        max-file: '5'

@@ -12,15 +12,15 @@ Ce projet est à but d'apprentissage. L'utilisateur souhaite comprendre et maît
 
 ### Technologies utilisées
 
-| Technologie | Emplacement | Rôle |
-|-------------|-------------|------|
-| **Node.js 22** | `src/` | Runtime JavaScript côté serveur (CommonJS) |
-| **Express 4** | `src/server.js`, `src/routes/` | Framework web et API REST |
-| **better-sqlite3** | `src/services/db.js`, `src/services/deviceStore.js` | Base SQLite synchrone |
-| **Helmet + express-rate-limit** | `src/middleware/` | Sécurité (CSP, rate limiting) |
-| **Vanilla JS modulaire** | `public/js/` | Frontend SPA (ES modules) |
-| **PWA** | `public/manifest.webmanifest`, `public/sw.js` | Installable et fonctionne offline |
-| **Docker multi-stage** | `Dockerfile`, `docker-compose.yml` | Build léger, user non-root, healthcheck |
+| Technologie                     | Emplacement                                         | Rôle                                       |
+| ------------------------------- | --------------------------------------------------- | ------------------------------------------ |
+| **Node.js 22**                  | `src/`                                              | Runtime JavaScript côté serveur (CommonJS) |
+| **Express 4**                   | `src/server.js`, `src/routes/`                      | Framework web et API REST                  |
+| **better-sqlite3**              | `src/services/db.js`, `src/services/deviceStore.js` | Base SQLite synchrone                      |
+| **Helmet + express-rate-limit** | `src/middleware/`                                   | Sécurité (CSP, rate limiting)              |
+| **Vanilla JS modulaire**        | `public/js/`                                        | Frontend SPA (ES modules)                  |
+| **PWA**                         | `public/manifest.webmanifest`, `public/sw.js`       | Installable et fonctionne offline          |
+| **Docker multi-stage**          | `Dockerfile`, `docker-compose.yml`                  | Build léger, user non-root, healthcheck    |
 
 ### Concepts clés à explorer
 
@@ -108,6 +108,7 @@ docker-compose logs -f spark
 ## Contexte d'apprentissage
 
 Quand l'utilisateur pose des questions :
+
 1. **Expliquer le "pourquoi"** avant le "comment"
 2. **Proposer des exercices** pour mettre en pratique
 3. **Faire des liens** entre les concepts (ex: UDP et WoL, ICMP et `child_process`)

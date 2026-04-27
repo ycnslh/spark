@@ -18,7 +18,7 @@ export function confirmDialog(message) {
     modal.innerHTML = `
       <div class="modal-content">
         <div class="modal-header"><h3 class="modal-title">Confirmation</h3></div>
-        <p style="margin-bottom:24px;"></p>
+        <p class="dialog-message"></p>
         <div class="form-buttons">
           <button type="button" class="btn cancel-button" data-act="cancel">Annuler</button>
           <button type="button" class="btn" data-act="ok">Confirmer</button>
@@ -27,7 +27,10 @@ export function confirmDialog(message) {
     modal.querySelector('p').textContent = message;
     document.body.appendChild(modal);
 
-    const close = (result) => { modal.remove(); resolve(result); };
+    const close = (result) => {
+      modal.remove();
+      resolve(result);
+    };
     modal.addEventListener('click', (e) => {
       if (e.target === modal) close(false);
       const act = e.target.closest('[data-act]')?.dataset.act;
@@ -64,8 +67,11 @@ export function copyToClipboard(text) {
     ta.select();
     try {
       document.execCommand('copy') ? resolve() : reject(new Error('execCommand failed'));
-    } catch (e) { reject(e); }
-    finally { ta.remove(); }
+    } catch (e) {
+      reject(e);
+    } finally {
+      ta.remove();
+    }
   });
 }
 
@@ -77,5 +83,7 @@ export function formatMac(mac) {
 export function formatDate(isoString) {
   try {
     return new Date(isoString.replace(' ', 'T') + 'Z').toLocaleString('fr-FR');
-  } catch { return isoString; }
+  } catch {
+    return isoString;
+  }
 }

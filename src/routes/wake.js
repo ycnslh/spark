@@ -5,21 +5,18 @@ const { pollUntilUp } = require('../services/pinger');
 const { isValidMac } = require('../utils/mac');
 const { renderPage, escapeHtml } = require('../utils/html');
 const { wakeRateLimiter } = require('../middleware/rateLimit');
+const { sameOrigin } = require('../middleware/sameOrigin');
+const { resolveDeviceHost } = require('../utils/deviceHost');
 const logger = require('../utils/logger');
 const config = require('../config');
 
 const router = express.Router();
-
-function deviceHost(device) {
-  return device.description && /^\d+\.\d+\.\d+\.\d+$/.test(device.description.trim())
-    ? device.description.trim()
-    : null;
-}
+const requireSameOrigin = sameOrigin();
 
 async function performWake(device, triggeredBy) {
   await sendWakeOnLan(device.mac);
   const result = store.recordWake({ deviceId: device.id, triggeredBy, success: true });
-  const host = deviceHost(device);
+  const host = resolveDeviceHost(device);
   if (host) {
     pollUntilUp(host, { totalMs: config.pingTimeoutMs, intervalMs: config.pingIntervalMs })
       .then((up) => store.setLastPingResult(result.lastInsertRowid, up))
@@ -27,7 +24,7 @@ async function performWake(device, triggeredBy) {
   }
 }
 
-router.post('/api/wake/:mac', wakeRateLimiter, async (req, res) => {
+router.post('/api/wake/:mac', requireSameOrigin, wakeRateLimiter, async (req, res) => {
   const { mac } = req.params;
   if (!isValidMac(mac)) {
     return res.status(400).json({ success: false, message: 'Adresse MAC invalide' });
@@ -42,11 +39,13 @@ router.post('/api/wake/:mac', wakeRateLimiter, async (req, res) => {
   } catch (err) {
     store.recordWake({ deviceId: device.id, triggeredBy: req.authUser || req.ip, success: false });
     logger.error('Wake failed', { mac, error: err.message });
-    return res.status(500).json({ success: false, message: 'Erreur lors de l\'envoi du paquet WoL' });
+    return res
+      .status(500)
+      .json({ success: false, message: "Erreur lors de l'envoi du paquet WoL" });
   }
 });
 
-router.get('/wake/:deviceId', wakeRateLimiter, async (req, res) => {
+router.get('/wake/:deviceId', requireSameOrigin, wakeRateLimiter, async (req, res) => {
   const device = store.findByNameOrMac(req.params.deviceId);
   if (!device) {
     const page = renderPage({
