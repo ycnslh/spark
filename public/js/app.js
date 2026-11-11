@@ -31,6 +31,7 @@ async function refresh() {
   try {
     currentDevices = await api.listDevices();
     renderAll();
+    await refreshSchedules();
     pollStatus();
   } catch (err) {
     console.error(err);
@@ -496,6 +497,7 @@ function startStream() {
     newTokenLinks.delete(id);
     currentDevices = currentDevices.filter((device) => device.id !== id);
     renderAll();
+    refreshSchedules();
   });
   eventSource.addEventListener('wake', (e) => {
     const { deviceId, state } = JSON.parse(e.data);
@@ -644,5 +646,160 @@ addDeviceForm.addEventListener('submit', async (event) => {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+
+const scheduleForm = document.getElementById('schedule-form');
+const scheduleDevice = document.getElementById('schedule-device');
+const schedulePause = document.getElementById('schedules-paused');
+const scheduleFeedback = document.getElementById('schedule-feedback');
+const dayNames = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
+let scheduleRequest = null;
+
+async function refreshSchedules() {
+  if (scheduleRequest) return scheduleRequest;
+  scheduleRequest = (async () => {
+    try {
+      const [schedules, state] = await Promise.all([api.listSchedules(), api.getScheduleState()]);
+      const selected = scheduleDevice.value;
+      scheduleDevice.replaceChildren(new Option('Sélectionnez un appareil', ''));
+      for (const device of currentDevices) {
+        const option = document.createElement('option');
+        option.value = device.id;
+        option.textContent = device.name;
+        scheduleDevice.add(option);
+      }
+      scheduleDevice.value = selected;
+      schedulePause.checked = state.paused;
+      schedulePause.setAttribute('aria-checked', String(state.paused));
+      schedulePause.disabled = false;
+      renderSchedules(schedules, state.paused);
+    } catch (err) {
+      scheduleFeedback.textContent = `Chargement des planifications impossible : ${err.message}`;
+    }
+  })().finally(() => {
+    scheduleRequest = null;
+  });
+  return scheduleRequest;
+}
+
+function renderSchedules(schedules, paused) {
+  const tbody = document.getElementById('schedules-tbody');
+  const focused = tbody.contains(document.activeElement)
+    ? document.activeElement.dataset.focusKey
+    : null;
+  tbody.replaceChildren();
+  if (!schedules.length) {
+    const cell = tbody.insertRow().insertCell();
+    cell.colSpan = 7;
+    cell.textContent = 'Aucune planification.';
+  }
+  for (const schedule of schedules) {
+    const row = tbody.insertRow();
+    const statusLabels = { running: 'En cours', sent: 'Paquet envoyé', failed: 'Échec' };
+    const values = [
+      schedule.label ? `${schedule.device_name} — ${schedule.label}` : schedule.device_name,
+      schedule.time,
+      schedule.days.map((day) => dayNames[day]).join(', '),
+      schedule.enabled ? (paused ? 'En pause globale' : 'Activée') : 'Désactivée',
+      schedule.last_run_at ? new Date(schedule.last_run_at).toLocaleString('fr-FR') : 'Jamais',
+      statusLabels[schedule.last_status] || '—',
+    ];
+    for (const value of values) row.insertCell().textContent = value;
+    const actions = row.insertCell();
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'copy-button';
+    toggle.textContent = schedule.enabled ? 'Désactiver' : 'Activer';
+    toggle.setAttribute(
+      'aria-label',
+      `${toggle.textContent} la planification de ${schedule.device_name} à ${schedule.time}`
+    );
+    toggle.dataset.focusKey = `toggle-${schedule.id}`;
+    toggle.addEventListener('click', () =>
+      scheduleAction(toggle, async () => {
+        await api.updateSchedule(schedule.id, { enabled: !schedule.enabled });
+        scheduleFeedback.textContent = 'Planification mise à jour.';
+      })
+    );
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'copy-button danger';
+    remove.textContent = 'Supprimer';
+    remove.setAttribute(
+      'aria-label',
+      `Supprimer la planification de ${schedule.device_name} à ${schedule.time}`
+    );
+    remove.dataset.focusKey = `delete-${schedule.id}`;
+    remove.addEventListener('click', async () => {
+      if (!(await confirmDialog('Supprimer cette planification ?'))) return;
+      await scheduleAction(remove, async () => {
+        await api.deleteSchedule(schedule.id);
+        scheduleFeedback.textContent = 'Planification supprimée.';
+      });
+      scheduleDevice.focus();
+    });
+    actions.append(toggle, remove);
+  }
+  if (focused) {
+    for (const button of tbody.querySelectorAll('button')) {
+      if (button.dataset.focusKey === focused) button.focus();
+    }
+  }
+}
+
+async function scheduleAction(button, action) {
+  button.disabled = true;
+  try {
+    await action();
+    await scheduleRequest;
+    await refreshSchedules();
+  } catch (err) {
+    scheduleFeedback.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+scheduleForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const days = [...scheduleForm.querySelectorAll('[name="schedule-day"]:checked')].map((input) =>
+    Number(input.value)
+  );
+  if (!days.length) {
+    scheduleFeedback.textContent = 'Sélectionnez au moins un jour.';
+    scheduleForm.querySelector('[name="schedule-day"]').focus();
+    return;
+  }
+  await scheduleAction(scheduleForm.querySelector('[type="submit"]'), async () => {
+    await api.createSchedule(scheduleDevice.value, {
+      time: document.getElementById('schedule-time').value,
+      days,
+      label: document.getElementById('schedule-label').value,
+    });
+    scheduleForm.reset();
+    scheduleFeedback.textContent = 'Planification ajoutée.';
+  });
+});
+
+schedulePause.addEventListener('change', async () => {
+  const paused = schedulePause.checked;
+  schedulePause.setAttribute('aria-checked', String(paused));
+  schedulePause.disabled = true;
+  try {
+    await api.setSchedulePaused(paused);
+    scheduleFeedback.textContent = paused
+      ? 'Tous les réveils planifiés sont en pause.'
+      : 'Les réveils planifiés sont repris.';
+  } catch (err) {
+    schedulePause.checked = !paused;
+    schedulePause.setAttribute('aria-checked', String(!paused));
+    scheduleFeedback.textContent = err.message;
+  } finally {
+    schedulePause.disabled = false;
+    await scheduleRequest;
+    await refreshSchedules();
+  }
+});
+
+setInterval(refreshSchedules, 30_000);
 
 refresh().then(() => startStream());

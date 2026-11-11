@@ -14,6 +14,24 @@ async function request(url, options = {}) {
 }
 
 export const api = {
+  listSchedules: () => request('/api/schedules'),
+  createSchedule: (id, payload) =>
+    request(`/api/devices/${id}/schedules`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateSchedule: (id, payload) =>
+    request(`/api/schedules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteSchedule: (id) => request(`/api/schedules/${id}`, { method: 'DELETE' }),
+  getScheduleState: () => request('/api/schedules/state'),
+  setSchedulePaused: (paused) =>
+    request('/api/schedules/state', {
+      method: 'PUT',
+      body: JSON.stringify({ paused }),
+    }),
   listTokens: (id) => request(`/api/devices/${id}/tokens`),
   createToken: (id, label) =>
     request(`/api/devices/${id}/tokens`, {

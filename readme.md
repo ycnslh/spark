@@ -9,6 +9,7 @@ Spark est une application web légère qui permet de réveiller des ordinateurs 
 - Envoi de paquets Wake-on-LAN (broadcast UDP port 9)
 - Statut online/offline en temps réel via ping ICMP / TCP probe (si une IP est configurée)
 - Historique des réveils par appareil avec confirmation post-ping
+- Réveils hebdomadaires planifiés, activation par planification et pause globale persistante
 - Liens secrets par appareil (`/wake/<nom>?token=…`) pour raccourcis iPhone / Siri
 - Authentification Basic optionnelle, rate-limit, CSP via Helmet
 - Stockage SQLite, logs Docker avec rotation automatique
@@ -38,19 +39,21 @@ Puis ouvre `http://<ip-de-ton-serveur>:8085` (port défini par `PORT` dans `.env
 
 Toutes les options sont dans [.env.example](.env.example) :
 
-| Variable              | Défaut | Rôle                                                              |
-| --------------------- | ------ | ----------------------------------------------------------------- |
-| `PORT`                | `8085` | Port d'écoute                                                     |
-| `LOG_LEVEL`           | `info` | `debug` / `info` / `warn` / `error`                               |
-| `AUTH_USER`           | (vide) | Utilisateur Basic Auth — si vide, auth désactivée                 |
-| `AUTH_PASS`           | (vide) | Mot de passe Basic Auth                                           |
-| `TRUST_PROXY`         | `0`    | Proxies de confiance pour les en-têtes transmis                   |
-| `SSE_MAX_CLIENTS`     | `20`   | Connexions SSE simultanées (entier strictement positif)           |
-| `WAKE_RATE_LIMIT`     | `10`   | Nombre max de réveils par minute par IP                           |
-| `WOL_BROADCAST`       | (vide) | Adresse cible unique, prioritaire sur la détection des interfaces |
-| `WOL_ALL_INTERFACES`  | `true` | Ajouter les broadcasts des interfaces IPv4 non internes           |
-| `WOL_REPEAT_DELAY_MS` | `2000` | Délai du second envoi en arrière-plan (ms), `0` le désactive      |
-| `WOL_PORT`            | `9`    | Port UDP des paquets WoL                                          |
+| Variable              | Défaut    | Rôle                                                              |
+| --------------------- | --------- | ----------------------------------------------------------------- |
+| `PORT`                | `8085`    | Port d'écoute                                                     |
+| `LOG_LEVEL`           | `info`    | `debug` / `info` / `warn` / `error`                               |
+| `AUTH_USER`           | (vide)    | Utilisateur Basic Auth — si vide, auth désactivée                 |
+| `AUTH_PASS`           | (vide)    | Mot de passe Basic Auth                                           |
+| `TRUST_PROXY`         | `0`       | Proxies de confiance pour les en-têtes transmis                   |
+| `SCHEDULER_ENABLED`   | `true`    | `false` désactive les réveils planifiés (API toujours disponible) |
+| `SCHEDULER_TZ`        | (système) | Fuseau IANA des planifications, par exemple `Europe/Paris`        |
+| `SSE_MAX_CLIENTS`     | `20`      | Connexions SSE simultanées (entier strictement positif)           |
+| `WAKE_RATE_LIMIT`     | `10`      | Nombre max de réveils par minute par IP                           |
+| `WOL_BROADCAST`       | (vide)    | Adresse cible unique, prioritaire sur la détection des interfaces |
+| `WOL_ALL_INTERFACES`  | `true`    | Ajouter les broadcasts des interfaces IPv4 non internes           |
+| `WOL_REPEAT_DELAY_MS` | `2000`    | Délai du second envoi en arrière-plan (ms), `0` le désactive      |
+| `WOL_PORT`            | `9`       | Port UDP des paquets WoL                                          |
 
 L'authentification est désactivée dès que `AUTH_USER` ou `AUTH_PASS` est vide ; Spark journalise alors un avertissement au démarrage. Configure les deux valeurs pour protéger l'accès. Avec `NODE_ENV=production`, le mot de passe `changeme` empêche le démarrage.
 
@@ -102,6 +105,20 @@ Le script lit `devices.csv` et insère les appareils dans `data/spark.db`. Les d
 
 L'ordre de résolution est : IP explicite, host existant, puis première IPv4 valide dans la description. Au premier démarrage après mise à jour, Spark ajoute automatiquement les colonnes `ip`, `broadcast` et `probe_port` à SQLite et copie la première IPv4 valide des anciennes descriptions vers `ip`, sans modifier les descriptions. Cette migration s'exécute une seule fois ; effacer une IP plus tard ne relance pas cette copie. Les anciens exports JSON restent importables ; les nouveaux exports incluent les trois champs.
 
+### Planifier les réveils
+
+Dans **Planification**, sélectionne un appareil, une heure (`HH:MM`) et au moins un jour de la semaine, puis ajoute éventuellement un libellé (60 caractères maximum). Chaque appareil peut avoir jusqu’à 20 planifications. La liste permet d’activer, désactiver ou supprimer chaque entrée ; l’interrupteur **Mettre tous les réveils planifiés en pause**, accessible au clavier, suspend toutes les entrées sans modifier leur activation. Cette pause reste enregistrée après redémarrage. Une suppression d’appareil supprime ses planifications.
+
+Le scheduler vérifie la minute courante au démarrage puis toutes les 30 secondes. Les heures et jours sont interprétés dans `SCHEDULER_TZ` (identifiant IANA, par exemple `Europe/Paris`), ou dans le fuseau du système si vide. Attention au fuseau du conteneur, qui peut être UTC. Un fuseau invalide empêche le démarrage avec une erreur française. `SCHEDULER_ENABLED=false` désactive les exécutions, tout en laissant la gestion disponible ; le remettre à `true` nécessite un redémarrage.
+
+**Aucun rattrapage** : les minutes manquées pendant un arrêt, une pause ou un tick encore occupé sont ignorées. Une reprise pendant la minute prévue peut encore lancer cette minute si elle n’a pas été réservée. Une réservation atomique est persistée avant l’envoi : au plus une tentative par planification et par minute locale, même après redémarrage ou lors du retour à l’heure d’hiver (la minute répétée ne se rejoue pas). Au passage à l’heure d’été, une heure inexistante est ignorée. Un arrêt brutal après réservation peut donc laisser un statut « En cours » sans nouvel essai automatique ; la prochaine échéance reste active. La pause et la désactivation n’annulent pas un envoi déjà commencé.
+
+La dernière exécution est l’instant UTC de la tentative, affiché dans le fuseau du navigateur. Le statut « Paquet envoyé » signifie que l’envoi UDP a réussi ; la confirmation de réveil reste dans l’historique et les événements SSE habituels. Les échecs sont isolés par planification, sans nouvel essai dans la même minute. L’historique utilise `triggered_by=schedule:<id>` et les événements `wake` (`sent`, `confirmed`, `timeout`, `failed`) restent disponibles. À l’arrêt SIGINT/SIGTERM, le timer est annulé et l’envoi en cours est attendu avant fermeture de SQLite.
+
+La migration automatique SQLite `user_version=3` ajoute `schedules` (jours stockés en texte `1,2,3,4,5`, dimanche = 0, état activé par défaut) et `scheduler_settings` (pause). Elle préserve appareils, historique et tokens, sans relancer les migrations déjà appliquées. La clé `last_run_minute` conserve la minute locale réservée, indépendamment de `last_run_at` en UTC. Sauvegarde la base de façon cohérente avant toute mise à jour réelle.
+
+Exemple de création via l’API authentifiée (avec une origine valide pour les écritures) : `POST /api/devices/1/schedules` avec `{"time":"08:30","days":[1,2,3,4,5],"label":"Bureau","enabled":true}`. `days` est un tableau non vide d’entiers uniques de 0 à 6 ; les chaînes, doublons et champs inconnus sont rejetés. `PATCH` accepte un sous-ensemble non vide des quatre champs. La pause se règle par `PUT /api/schedules/state` avec `{"paused":true}` ou `{"paused":false}`.
+
 ### Raccourcis iPhone
 
 Chaque token autorise uniquement le réveil de l'appareil auquel il appartient. Tu peux créer plusieurs tokens par appareil (par exemple un par téléphone), les nommer, consulter leur dernière utilisation et les révoquer séparément.
@@ -142,6 +159,12 @@ docker-compose logs spark 1>/dev/null     # seulement WARN/ERROR
 | GET     | `/api/devices/:id/tokens`          | Liste les métadonnées des tokens, sans secret                                             |
 | DELETE  | `/api/devices/:id/tokens/:tokenId` | Révoque un token de cet appareil                                                          |
 | GET     | `/api/devices/:id/history`         | 20 derniers réveils                                                                       |
+| GET     | `/api/schedules`                   | Liste toutes les planifications avec appareil, dernière tentative et statut               |
+| POST    | `/api/devices/:id/schedules`       | Crée `{time, days, label?, enabled?}` (20 maximum par appareil)                           |
+| PATCH   | `/api/schedules/:id`               | Modifie heure, jours, libellé et/ou activation                                            |
+| DELETE  | `/api/schedules/:id`               | Supprime une planification                                                                |
+| GET     | `/api/schedules/state`             | Lit `{paused:boolean}`                                                                    |
+| PUT     | `/api/schedules/state`             | Modifie `{paused:boolean}` (persistant)                                                   |
 | GET     | `/api/events`                      | Flux SSE authentifié de statut et de réveil                                               |
 | GET     | `/api/status`                      | Statut online/offline via IP, host ou ancienne description                                |
 | POST    | `/api/wake/:mac`                   | Réveille un appareil (réponse JSON)                                                       |
@@ -167,7 +190,7 @@ spark/
 └── docker-compose.yml
 ```
 
-Les routes de gestion des tokens suivent les mêmes protections Basic Auth et gardes d'écriture que les appareils (Basic désactivée seulement si les identifiants ne sont pas configurés). Un token ne donne accès à aucune autre API. Seul `GET /wake/:nom?token=…` contourne Basic et l'origine pour l'appareil correspondant (nom, MAC ou id) ; les tokens invalides, révoqués ou d'un autre appareil renvoient le même 401 et comptent dans le limiteur d'échecs d'authentification. Le limiteur de réveil reste actif.
+Les routes de planification et de gestion des tokens suivent les mêmes protections Basic Auth et gardes d'écriture que les appareils (Basic désactivée seulement si les identifiants ne sont pas configurés). Un token ne donne accès à aucune autre API. Seul `GET /wake/:nom?token=…` contourne Basic et l'origine pour l'appareil correspondant (nom, MAC ou id) ; les tokens invalides, révoqués ou d'un autre appareil renvoient le même 401 et comptent dans le limiteur d'échecs d'authentification. Le limiteur de réveil reste actif.
 
 Stack : Node.js 22, Express 4, better-sqlite3, Helmet, express-rate-limit. Aucun framework côté frontend (vanilla JS modulaire + service worker).
 

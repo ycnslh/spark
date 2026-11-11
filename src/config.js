@@ -41,5 +41,9 @@ module.exports = {
   pingTimeoutMs: 60_000,
   pingIntervalMs: 5_000,
   statusPollMs: 30_000,
+  scheduler: {
+    enabled: process.env.SCHEDULER_ENABLED !== 'false',
+    timeZone: process.env.SCHEDULER_TZ?.trim() || undefined,
+  },
   sseMaxClients: Number.isSafeInteger(sseMaxClients) && sseMaxClients > 0 ? sseMaxClients : 20,
 };

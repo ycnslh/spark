@@ -89,6 +89,29 @@ function initSchema(database) {
       `);
       database.pragma('user_version = 2');
     }
+    if (database.pragma('user_version', { simple: true }) < 3) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS schedules (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          label TEXT,
+          time TEXT NOT NULL,
+          days TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          last_run_at TEXT,
+          last_run_minute TEXT,
+          last_status TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_schedules_device ON schedules(device_id);
+        CREATE TABLE IF NOT EXISTS scheduler_settings (
+          key TEXT PRIMARY KEY,
+          value INTEGER NOT NULL CHECK (value IN (0, 1))
+        );
+        INSERT OR IGNORE INTO scheduler_settings (key, value) VALUES ('paused', 0);
+      `);
+      database.pragma('user_version = 3');
+    }
   })();
 }
 

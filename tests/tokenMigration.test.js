@@ -9,7 +9,7 @@ process.env.DB_PATH = path.join(tmpDir, 'lot3.db');
 process.env.NODE_ENV = 'test';
 const { getDb, closeDb } = require('../src/services/db');
 
-test('lot 3 version 1 migrates idempotently to version 2 without repeating IP backfill', (t) => {
+test('lot 3 version 1 migrates idempotently through version 3 without repeating IP backfill', (t) => {
   t.after(() => {
     closeDb();
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -35,14 +35,14 @@ test('lot 3 version 1 migrates idempotently to version 2 without repeating IP ba
   const history = old.prepare('SELECT * FROM wake_history').all();
   old.close();
   const db = getDb();
-  assert.equal(db.pragma('user_version', { simple: true }), 2);
+  assert.equal(db.pragma('user_version', { simple: true }), 3);
   assert.equal(db.pragma('foreign_keys', { simple: true }), 1);
   assert.deepEqual(db.prepare('SELECT * FROM devices').all(), before);
   assert.deepEqual(db.prepare('SELECT * FROM wake_history').all(), history);
   assert.equal(db.pragma('foreign_key_list(wake_tokens)')[0].on_delete, 'CASCADE');
   const token = require('../src/services/tokenStore').createToken(1);
   closeDb();
-  assert.equal(getDb().pragma('user_version', { simple: true }), 2);
+  assert.equal(getDb().pragma('user_version', { simple: true }), 3);
   assert.deepEqual(getDb().prepare('SELECT * FROM devices').all(), before);
   assert.equal(
     getDb().prepare('SELECT count(*) n FROM wake_tokens WHERE id = ?').get(token.id).n,

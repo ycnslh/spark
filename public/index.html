@@ -44,6 +44,79 @@
         </div>
       </section>
 
+      <section class="section" aria-labelledby="schedules-heading">
+        <div class="section-header">
+          <h2 id="schedules-heading" class="section-title">Planification</h2>
+          <label class="schedule-pause" for="schedules-paused">
+            <input
+              id="schedules-paused"
+              type="checkbox"
+              role="switch"
+              aria-checked="false"
+              disabled
+            />
+            Mettre tous les réveils planifiés en pause
+          </label>
+        </div>
+        <p class="section-help">
+          Les heures suivent le fuseau du serveur (SCHEDULER_TZ si configuré). Les réveils manqués
+          pendant un arrêt ou une pause ne sont pas rattrapés.
+        </p>
+        <p id="schedule-feedback" role="status" aria-live="polite"></p>
+        <div
+          class="schedule-table-scroll"
+          role="region"
+          aria-label="Réveils planifiés"
+          tabindex="0"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Appareil / libellé</th>
+                <th scope="col">Heure</th>
+                <th scope="col">Jours</th>
+                <th scope="col">État</th>
+                <th scope="col">Dernière exécution</th>
+                <th scope="col">Statut</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="schedules-tbody">
+              <tr>
+                <td colspan="7">Chargement…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <form id="schedule-form" class="schedule-form">
+          <div class="form-group">
+            <label for="schedule-device">Appareil</label>
+            <select id="schedule-device" required>
+              <option value="">Sélectionnez un appareil</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="schedule-time">Heure</label>
+            <input id="schedule-time" type="time" step="60" required />
+          </div>
+          <div class="form-group">
+            <label for="schedule-label">Libellé (facultatif)</label>
+            <input id="schedule-label" type="text" maxlength="60" />
+          </div>
+          <fieldset class="schedule-days">
+            <legend>Jours de la semaine (au moins un)</legend>
+            <label><input type="checkbox" name="schedule-day" value="1" /> Lundi</label>
+            <label><input type="checkbox" name="schedule-day" value="2" /> Mardi</label>
+            <label><input type="checkbox" name="schedule-day" value="3" /> Mercredi</label>
+            <label><input type="checkbox" name="schedule-day" value="4" /> Jeudi</label>
+            <label><input type="checkbox" name="schedule-day" value="5" /> Vendredi</label>
+            <label><input type="checkbox" name="schedule-day" value="6" /> Samedi</label>
+            <label><input type="checkbox" name="schedule-day" value="0" /> Dimanche</label>
+          </fieldset>
+          <button class="btn" type="submit">Ajouter une planification</button>
+        </form>
+      </section>
+
       <section class="section" aria-labelledby="links-heading">
         <div class="section-header">
           <h2 id="links-heading" class="section-title">Liens directs pour raccourcis</h2>
