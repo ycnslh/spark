@@ -20,19 +20,8 @@ function getRequestHostUrl(req) {
   return `${proto}://${host}`;
 }
 
-function isAppleShortcut(req) {
-  const ua = req.get('User-Agent') || '';
-  return /Shortcuts/i.test(ua);
-}
-
-function sameOrigin(options = {}) {
-  const allowAppleShortcuts = options.allowAppleShortcuts !== false;
-
+function sameOrigin() {
   return (req, res, next) => {
-    if (req.method === 'GET' && allowAppleShortcuts && isAppleShortcut(req)) {
-      return next();
-    }
-
     const expected = getRequestHostUrl(req);
     const actual = getRequestOrigin(req);
 
@@ -48,4 +37,4 @@ function sameOrigin(options = {}) {
   };
 }
 
-module.exports = { sameOrigin, getRequestOrigin, isAppleShortcut };
+module.exports = { sameOrigin, getRequestOrigin };

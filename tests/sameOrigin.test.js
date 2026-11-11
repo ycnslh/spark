@@ -43,9 +43,9 @@ test('accepts POST when Referer matches host', async () => {
   assert.equal(res.status, 200);
 });
 
-test('GET with Apple Shortcuts UA bypasses origin check', async () => {
+test('GET with Apple Shortcuts UA requires origin check', async () => {
   const res = await request(buildApp()).get('/mut').set('User-Agent', 'Shortcuts/1.0');
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 403);
 });
 
 test('GET without Shortcuts UA still requires Origin', async () => {

@@ -1,5 +1,13 @@
 const toastContainer = document.getElementById('toast-container');
 
+export function focusableElements(container) {
+  return [
+    ...container.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])'
+    ),
+  ].filter((element) => element.getClientRects().length > 0);
+}
+
 export function toast(message, type = 'info', durationMs = 4000) {
   const el = document.createElement('div');
   el.className = `toast ${type}`;

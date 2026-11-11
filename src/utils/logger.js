@@ -4,7 +4,37 @@ const isDev = process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 
 const isTest = process.env.NODE_ENV === 'test';
 const level = (process.env.LOG_LEVEL || (isTest ? 'silent' : 'info')).toLowerCase();
 
-const baseOptions = { level, base: { app: 'spark' } };
+// Retirer toute query string, y compris dans les messages d'erreur, avant Pino.
+// Les clés sensibles sont aussi masquées si un objet de requête est journalisé.
+function redact(value, seen = new WeakSet()) {
+  if (typeof value === 'string') return value.replace(/\?[^\s"'<>]*/g, '?[REDACTED]');
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+  if (value instanceof Error) {
+    return { name: value.name, message: redact(value.message), stack: redact(value.stack) };
+  }
+  if (Array.isArray(value)) return value.map((item) => redact(item, seen));
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      /^(token|authorization|cookie)$/i.test(key) ? '[REDACTED]' : redact(item, seen),
+    ])
+  );
+}
+
+const baseOptions = {
+  level,
+  base: { app: 'spark' },
+  hooks: {
+    logMethod(args, method) {
+      return method.apply(
+        this,
+        args.map((arg) => redact(arg))
+      );
+    },
+  },
+};
 
 const transport = isDev
   ? {
@@ -33,7 +63,7 @@ module.exports = {
   warn: wrap('warn'),
   error: wrap('error'),
   child: (bindings) => {
-    const c = logger.child(bindings);
+    const c = logger.child(redact(bindings));
     return {
       debug: (msg, meta) => (meta ? c.debug(meta, msg) : c.debug(msg)),
       info: (msg, meta) => (meta ? c.info(meta, msg) : c.info(msg)),

@@ -44,12 +44,86 @@
         </div>
       </section>
 
+      <section class="section" aria-labelledby="schedules-heading">
+        <div class="section-header">
+          <h2 id="schedules-heading" class="section-title">Planification</h2>
+          <label class="schedule-pause" for="schedules-paused">
+            <input
+              id="schedules-paused"
+              type="checkbox"
+              role="switch"
+              aria-checked="false"
+              disabled
+            />
+            Mettre tous les réveils planifiés en pause
+          </label>
+        </div>
+        <p class="section-help">
+          Les heures suivent le fuseau du serveur (SCHEDULER_TZ si configuré). Les réveils manqués
+          pendant un arrêt ou une pause ne sont pas rattrapés.
+        </p>
+        <p id="schedule-feedback" role="status" aria-live="polite"></p>
+        <div
+          class="schedule-table-scroll"
+          role="region"
+          aria-label="Réveils planifiés"
+          tabindex="0"
+        >
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Appareil / libellé</th>
+                <th scope="col">Heure</th>
+                <th scope="col">Jours</th>
+                <th scope="col">État</th>
+                <th scope="col">Dernière exécution</th>
+                <th scope="col">Statut</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="schedules-tbody">
+              <tr>
+                <td colspan="7">Chargement…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <form id="schedule-form" class="schedule-form">
+          <div class="form-group">
+            <label for="schedule-device">Appareil</label>
+            <select id="schedule-device" required>
+              <option value="">Sélectionnez un appareil</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="schedule-time">Heure</label>
+            <input id="schedule-time" type="time" step="60" required />
+          </div>
+          <div class="form-group">
+            <label for="schedule-label">Libellé (facultatif)</label>
+            <input id="schedule-label" type="text" maxlength="60" />
+          </div>
+          <fieldset class="schedule-days">
+            <legend>Jours de la semaine (au moins un)</legend>
+            <label><input type="checkbox" name="schedule-day" value="1" /> Lundi</label>
+            <label><input type="checkbox" name="schedule-day" value="2" /> Mardi</label>
+            <label><input type="checkbox" name="schedule-day" value="3" /> Mercredi</label>
+            <label><input type="checkbox" name="schedule-day" value="4" /> Jeudi</label>
+            <label><input type="checkbox" name="schedule-day" value="5" /> Vendredi</label>
+            <label><input type="checkbox" name="schedule-day" value="6" /> Samedi</label>
+            <label><input type="checkbox" name="schedule-day" value="0" /> Dimanche</label>
+          </fieldset>
+          <button class="btn" type="submit">Ajouter une planification</button>
+        </form>
+      </section>
+
       <section class="section" aria-labelledby="links-heading">
         <div class="section-header">
           <h2 id="links-heading" class="section-title">Liens directs pour raccourcis</h2>
         </div>
         <p class="section-help">
-          Utilisez ces liens pour créer des raccourcis sur votre iPhone ou tout autre appareil.
+          Créez un token dans la fiche d’un appareil pour obtenir son lien de raccourci. Le lien
+          secret reste disponible uniquement jusqu’à sa fermeture ou au rechargement.
         </p>
         <table>
           <thead>
@@ -103,18 +177,62 @@
             <div class="hint">Format XX:XX:XX:XX:XX:XX ou XXXXXXXXXXXX</div>
           </div>
           <div class="form-group">
-            <label for="device-host">Host (IP ou hostname, optionnel)</label>
+            <label for="device-ip">Adresse IP (IPv4, optionnel)</label>
             <input
               type="text"
-              id="device-host"
-              maxlength="253"
+              id="device-ip"
+              maxlength="15"
               placeholder="192.168.1.42"
               autocomplete="off"
             />
             <div class="hint">
-              Utilisé pour vérifier le statut online/offline. Laisser vide si non applicable.
+              Adresse utilisée en priorité pour vérifier le statut et confirmer les réveils.
             </div>
           </div>
+          <div class="form-group">
+            <label for="device-probe_port">Port de sonde TCP (optionnel)</label>
+            <input
+              type="number"
+              id="device-probe_port"
+              min="1"
+              max="65535"
+              step="1"
+              placeholder="Ex. 3389"
+            />
+            <div class="hint">
+              Vide : sondes sur les ports 22, 3389, 445 et 80 après le ping ICMP.
+            </div>
+          </div>
+          <details id="device-network-options" class="network-options">
+            <summary>Options réseau avancées</summary>
+            <div class="form-group">
+              <label for="device-broadcast">Broadcast IPv4 (optionnel)</label>
+              <input
+                type="text"
+                id="device-broadcast"
+                maxlength="15"
+                placeholder="192.168.1.255"
+                autocomplete="off"
+              />
+              <div class="hint">
+                Vide : réglages globaux. Renseigné : seule cette cible reçoit les paquets de cet
+                appareil.
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="device-host">Host de secours (IP ou hostname, optionnel)</label>
+              <input
+                type="text"
+                id="device-host"
+                maxlength="253"
+                placeholder="192.168.1.42"
+                autocomplete="off"
+              />
+              <div class="hint">
+                Utilisé si l’adresse IP est vide, avant l’ancienne IP en description.
+              </div>
+            </div>
+          </details>
           <div class="form-group">
             <label for="device-description">Description (optionnel)</label>
             <textarea

@@ -1,9 +1,35 @@
 const dgram = require('dgram');
+const os = require('os');
+const { isIPv4 } = require('net');
+const config = require('../config');
 const { macToBuffer } = require('../utils/mac');
 const logger = require('../utils/logger');
 
 const BROADCAST_ADDRESS = '255.255.255.255';
-const WOL_PORT = 9;
+
+function calculateBroadcasts(networkInterfaces) {
+  const broadcasts = new Set();
+  for (const addresses of Object.values(networkInterfaces)) {
+    for (const entry of addresses || []) {
+      if (
+        entry.internal ||
+        (entry.family !== 'IPv4' && entry.family !== 4) ||
+        !isIPv4(entry.address) ||
+        !isIPv4(entry.netmask)
+      ) {
+        continue;
+      }
+      const mask = entry.netmask.split('.').map(Number);
+      const broadcast = entry.address
+        .split('.')
+        .map((octet, i) => Number(octet) | (~mask[i] & 255))
+        .join('.');
+      broadcasts.add(broadcast);
+    }
+  }
+  broadcasts.add(BROADCAST_ADDRESS);
+  return [...broadcasts];
+}
 
 function buildMagicPacket(macBuffer) {
   const packet = Buffer.alloc(6 + 16 * 6);
@@ -14,39 +40,84 @@ function buildMagicPacket(macBuffer) {
   return packet;
 }
 
-function sendWakeOnLan(mac) {
+function sendToBroadcast(packet, broadcast, port) {
   return new Promise((resolve, reject) => {
-    let macBuffer;
-    try {
-      macBuffer = macToBuffer(mac);
-    } catch (err) {
-      return reject(err);
+    // A socket per target keeps a socket error from cancelling the other sends.
+    const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    let settled = false;
+    function finish(err) {
+      if (settled) return;
+      settled = true;
+      try {
+        socket.close();
+      } catch {
+        // Binding may have failed before the socket started running.
+      }
+      if (err) reject(err);
+      else resolve();
     }
 
-    const packet = buildMagicPacket(macBuffer);
-    const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
-
-    socket.on('error', (err) => {
-      logger.error('WoL socket error', { error: err.message });
-      socket.close();
-      reject(err);
+    socket.on('error', finish);
+    socket.once('listening', () => {
+      try {
+        socket.setBroadcast(true);
+        socket.send(packet, 0, packet.length, port, broadcast, finish);
+      } catch (err) {
+        finish(err);
+      }
     });
-
-    socket.on('listening', () => {
-      socket.setBroadcast(true);
-      socket.send(packet, 0, packet.length, WOL_PORT, BROADCAST_ADDRESS, (err) => {
-        socket.close();
-        if (err) {
-          logger.error('WoL send error', { mac, error: err.message });
-          return reject(err);
-        }
-        logger.info('WoL packet sent', { mac });
-        resolve();
-      });
-    });
-
-    socket.bind({ address: '0.0.0.0', port: 0 });
+    try {
+      socket.bind({ address: '0.0.0.0', port: 0 });
+    } catch (err) {
+      finish(err);
+    }
   });
 }
 
-module.exports = { sendWakeOnLan, buildMagicPacket };
+async function sendPacket(packet, broadcasts, port) {
+  const results = await Promise.allSettled(
+    broadcasts.map((broadcast) => sendToBroadcast(packet, broadcast, port))
+  );
+  const errors = [];
+  results.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      errors.push(result.reason);
+      logger.debug('WoL target failed', { broadcast: broadcasts[i], error: result.reason.message });
+    }
+  });
+  if (errors.length === results.length) {
+    throw new AggregateError(errors, 'WoL send failed for all targets');
+  }
+}
+
+async function sendWakeOnLan(mac, options = {}) {
+  const packet = buildMagicPacket(macToBuffer(mac));
+  const broadcasts =
+    options.broadcasts ??
+    (config.wol.broadcast
+      ? [config.wol.broadcast]
+      : config.wol.allInterfaces
+        ? calculateBroadcasts(os.networkInterfaces())
+        : [BROADCAST_ADDRESS]);
+  const port = options.port ?? config.wol.port;
+  const repeatDelayMs = options.repeatDelayMs ?? config.wol.repeatDelayMs;
+
+  try {
+    await sendPacket(packet, broadcasts, port);
+  } catch (err) {
+    logger.error('WoL send error', { mac, error: err.message });
+    throw err;
+  }
+  logger.info('WoL packet sent', { mac });
+
+  if (repeatDelayMs > 0) {
+    setTimeout(() => {
+      sendPacket(packet, broadcasts, port).then(
+        () => logger.debug('WoL repeat sent', { mac }),
+        (err) => logger.debug('WoL repeat failed', { mac, error: err.message })
+      );
+    }, repeatDelayMs).unref();
+  }
+}
+
+module.exports = { sendWakeOnLan, buildMagicPacket, calculateBroadcasts };

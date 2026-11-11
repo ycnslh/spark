@@ -13,11 +13,16 @@ async function checkDevice(d, now) {
   if (!host) return { id: d.id, online: null };
 
   const cached = cache.get(d.id);
-  if (cached && now - cached.at < TTL_MS) {
+  if (
+    cached &&
+    cached.host === host &&
+    cached.probePort === d.probe_port &&
+    now - cached.at < TTL_MS
+  ) {
     return { id: d.id, online: cached.online };
   }
-  const online = await isHostUp(host, { timeoutMs: 800 });
-  cache.set(d.id, { online, at: now });
+  const online = await isHostUp(host, { timeoutMs: 800, probePort: d.probe_port });
+  cache.set(d.id, { online, at: now, host, probePort: d.probe_port });
   return { id: d.id, online };
 }
 
@@ -35,42 +40,11 @@ router.post('/api/status/:id/refresh', async (req, res) => {
   if (!device) return res.status(404).json({ success: false });
   const host = resolveDeviceHost(device);
   if (!host) return res.json({ id, online: null });
-  const online = await isHostUp(host, { timeoutMs: 1500 });
-  cache.set(id, { online, at: Date.now() });
+  const online = await isHostUp(host, { timeoutMs: 1500, probePort: device.probe_port });
+  cache.set(id, { online, at: Date.now(), host, probePort: device.probe_port });
   const poller = getPoller();
   poller.setStatus(id, online);
   res.json({ id, online });
-});
-
-router.get('/api/status/stream', (req, res) => {
-  res.set({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-  res.flushHeaders?.();
-
-  const poller = getPoller();
-  const send = (event, data) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  send('snapshot', poller.getSnapshot());
-
-  const onChange = (payload) => send('change', payload);
-  const onRemove = (payload) => send('remove', payload);
-  poller.on('change', onChange);
-  poller.on('remove', onRemove);
-
-  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
-
-  req.on('close', () => {
-    clearInterval(ping);
-    poller.off('change', onChange);
-    poller.off('remove', onRemove);
-  });
 });
 
 module.exports = router;

@@ -4,6 +4,15 @@ services:
     container_name: spark
     restart: unless-stopped
     network_mode: host
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       # Persiste la base SQLite entre les redéploiements.
       # Le dossier ./data est créé sur l'hôte au premier démarrage.

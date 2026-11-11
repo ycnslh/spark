@@ -5,6 +5,7 @@ const { isValidMac, formatMac } = require('../utils/mac');
 const { isSafeHost } = require('../services/pinger');
 const { getDb } = require('../services/db');
 const logger = require('../utils/logger');
+const { validateNetworkFields } = require('../utils/ipv4');
 
 const router = express.Router();
 
@@ -21,6 +22,9 @@ router.get('/api/export', (_req, res) => {
       mac: d.mac,
       host: d.host,
       description: d.description,
+      ip: d.ip,
+      broadcast: d.broadcast,
+      probe_port: d.probe_port,
       tags: (d.tags || []).map((t) => t.name),
     })),
   });
@@ -65,6 +69,10 @@ router.post('/api/import', (req, res) => {
         stats.skipped++;
         continue;
       }
+      if (validateNetworkFields(d)) {
+        stats.skipped++;
+        continue;
+      }
       if (store.macExists(d.mac) || store.nameExists(d.name)) {
         stats.skipped++;
         continue;
@@ -74,6 +82,9 @@ router.post('/api/import', (req, res) => {
         mac: formatMac(d.mac),
         host: d.host || null,
         description: d.description || null,
+        ip: d.ip || null,
+        broadcast: d.broadcast || null,
+        probe_port: d.probe_port ?? null,
       });
       if (Array.isArray(d.tags) && d.tags.length) {
         const tagIds = d.tags

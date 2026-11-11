@@ -1,15 +1,13 @@
 const { isSafeHost } = require('../services/pinger');
 
-const IPV4_REGEX = /^\d{1,3}(\.\d{1,3}){3}$/;
+const { isIPv4 } = require('net');
+const { extractIPv4 } = require('./ipv4');
 
 function resolveDeviceHost(device) {
   if (!device) return null;
-  if (device.host && isSafeHost(device.host.trim())) return device.host.trim();
-  if (device.description) {
-    const desc = device.description.trim();
-    if (IPV4_REGEX.test(desc) && isSafeHost(desc)) return desc;
-  }
-  return null;
+  if (typeof device.ip === 'string' && isIPv4(device.ip) && isSafeHost(device.ip)) return device.ip;
+  if (typeof device.host === 'string' && isSafeHost(device.host.trim())) return device.host.trim();
+  return extractIPv4(device.description);
 }
 
 module.exports = { resolveDeviceHost };

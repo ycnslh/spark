@@ -1,7 +1,7 @@
 const { getDb } = require('./db');
-const { normalizeMac, formatMac } = require('../utils/mac');
+const { normalizeMac, formatMac, isValidMac } = require('../utils/mac');
 
-const SELECT_COLS = 'id, name, mac, host, description, created_at';
+const SELECT_COLS = 'id, name, mac, host, description, ip, broadcast, probe_port, created_at';
 
 function listDevices() {
   return getDb().prepare(`SELECT ${SELECT_COLS} FROM devices ORDER BY name COLLATE NOCASE`).all();
@@ -15,29 +15,46 @@ function findByNameOrMac(identifier) {
   const db = getDb();
   const byName = db.prepare('SELECT * FROM devices WHERE name = ? COLLATE NOCASE').get(identifier);
   if (byName) return byName;
-  try {
-    return db.prepare('SELECT * FROM devices WHERE mac = ?').get(formatMac(identifier));
-  } catch {
-    return null;
+  if (isValidMac(identifier)) {
+    const byMac = db.prepare('SELECT * FROM devices WHERE mac = ?').get(formatMac(identifier));
+    if (byMac) return byMac;
   }
+  if (/^[1-9]\d*$/.test(String(identifier)) && Number.isSafeInteger(Number(identifier))) {
+    return findById(Number(identifier));
+  }
+  return null;
 }
 
 function findById(id) {
   return getDb().prepare('SELECT * FROM devices WHERE id = ?').get(id);
 }
 
-function createDevice({ name, mac, host, description }) {
+function createDevice({ name, mac, host, description, ip, broadcast, probe_port }) {
   const formatted = formatMac(mac);
   const stmt = getDb().prepare(
-    'INSERT INTO devices (name, mac, host, description) VALUES (?, ?, ?, ?)'
+    'INSERT INTO devices (name, mac, host, description, ip, broadcast, probe_port) VALUES (?, ?, ?, ?, ?, ?, ?)'
   );
-  const result = stmt.run(name, formatted, host || null, description || null);
+  const result = stmt.run(
+    name,
+    formatted,
+    host || null,
+    description || null,
+    ip || null,
+    broadcast || null,
+    probe_port ?? null
+  );
   return findById(result.lastInsertRowid);
 }
 
-function updateDevice(id, { name, host, description }) {
+function updateDevice(id, { name, host, description, ip, broadcast, probe_port }) {
   const fields = [];
   const values = [];
+  for (const [field, value] of Object.entries({ ip, broadcast, probe_port })) {
+    if (value !== undefined) {
+      fields.push(`${field} = ?`);
+      values.push(value === '' ? null : value);
+    }
+  }
   if (name !== undefined) {
     fields.push('name = ?');
     values.push(name);
