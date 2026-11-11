@@ -4,7 +4,7 @@ Spark est une application web légère qui permet de réveiller des ordinateurs 
 
 ## Fonctionnalités
 
-- Interface web responsive, installable comme PWA
+- Interface web responsive, installable comme PWA avec page de repli hors ligne
 - Gestion des appareils (ajout, modification, suppression, IP et description séparées)
 - Envoi de paquets Wake-on-LAN (broadcast UDP port 9)
 - Statut online/offline en temps réel via ping ICMP / TCP probe (si une IP est configurée)
@@ -178,9 +178,31 @@ npm install
 cp .env.example .env
 npm start                  # dev local
 npm test                   # tests (node --test, supertest)
+npm run lint               # ESLint 9, configuration flat
+npm run format:check       # Prettier
 ```
 
+Utilise Node.js 22 pour le développement et les dépendances natives SQLite. Si le Node par défaut est différent, lance les commandes via `npx --yes --package=node@22 --call "npm test"` (idem pour `npm run lint`, `npm run format:check` et `npm audit`). Après un changement de version Node, réinstalle les dépendances natives avec cette version.
+
+ESLint 9 utilise `eslint.config.js` : règles recommandées et règles du projet, backend/scripts/tests en CommonJS Node, `public/js/` en modules navigateur et `public/sw.js` en environnement service worker. Les exclusions `node_modules`, `data` et `coverage` sont dans cette configuration. Voir le [guide de migration ESLint](https://eslint.org/docs/latest/use/configure/migration-guide).
+
+## Cache PWA et mode hors ligne
+
+`GET /sw.js` est servi par Express avant les fichiers statiques, sous la même authentification et CSP (`script-src 'self'`). Il porte `Cache-Control: no-cache`. Au démarrage, le serveur calcule un SHA-256 tronqué à 16 caractères à partir du worker et du contenu des fichiers précachés ; aucun numéro de cache n'est à maintenir à la main. Redémarre Spark après une modification des assets. La liste est centralisée dans `src/routes/serviceWorker.js` : y ajouter les futurs fichiers statiques à précacher.
+
+Seuls `offline.html`, les CSS, l'icône, le manifest et les modules JS sont précachés. Les assets utilisent stale-while-revalidate : réponse du cache puis mise à jour en arrière-plan. Les navigations passent d'abord par le réseau et affichent `offline.html` si le réseau échoue ; aucune page authentifiée (`/` et `index.html` compris) n'est enregistrée. `/api/` (dont SSE), `/wake/` et `/health` contournent entièrement le worker. Les réponses non réussies ou redirigées, les autres origines et les URL d'assets avec query string ne sont jamais mises en cache. À l'activation, les anciens caches `spark-*` sont supprimés.
+
+La page hors ligne est en français, utilise le CSS existant et ne contient aucun script inline. Le serveur doit avoir été visité en ligne pour installer ce cache ; la gestion et le réveil des appareils nécessitent le réseau. Les mises à jour du worker suivent le cycle du navigateur ; HTTPS (ou localhost) est nécessaire à son enregistrement.
+
+## Docker durci
+
+L'image utilise Node 22 épinglé par version et digest multiarchitecture, un utilisateur non-root et `npm ci --omit=dev`. Compose conserve `./data:/app/data` comme seul stockage persistant : système racine en lecture seule, `/tmp` en tmpfs, toutes les capabilities retirées sauf `NET_RAW` pour ICMP, et `no-new-privileges:true` pour bloquer l'élévation de privilèges. Le dossier `./data` doit être accessible en écriture par l'utilisateur `app` de l'image ; ne change pas les droits d'une base existante sans vérifier son propriétaire.
+
+Le mode réseau host de Compose sert au broadcast WoL sur le réseau local. Les tests isolés peuvent tourner en bridge avec un port publié et un volume temporaire ; ils ne valident pas le broadcast sur le LAN. ICMP dépend aussi du noyau et des permissions des sockets ping ; les sondes TCP restent disponibles en repli.
+
 ## Mises à jour
+
+Dependabot vérifie chaque semaine npm, les GitHub Actions et l'image Docker ; les mises à jour mineures/patch sont regroupées par écosystème. La CI exécute `npm audit --omit=dev --audit-level=high` en plus du lint, du formatage et des tests. Examiner les changements majeurs séparément et relancer `npm audit` complet pour les outils de développement.
 
 Sauvegarde `data/spark.db` avant toute mise à jour, avec une sauvegarde SQLite cohérente (API de sauvegarde SQLite, ou application arrêtée). La migration automatique doit être validée sur une copie de ta base avant une mise à jour en production.
 

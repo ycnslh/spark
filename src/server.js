@@ -18,6 +18,7 @@ const statusRouter = require('./routes/status');
 const tagsRouter = require('./routes/tags');
 const dataRouter = require('./routes/data');
 const { createEventsRouter } = require('./routes/events');
+const { createServiceWorkerHandler } = require('./routes/serviceWorker');
 const eventsRouter = createEventsRouter();
 
 const app = express();
@@ -58,6 +59,7 @@ const requireWriteGuard = (req, res, next) => {
   });
 };
 
+app.get('/sw.js', createServiceWorkerHandler(config.publicDir));
 app.use(express.static(config.publicDir));
 app.use('/api/devices', requireWriteGuard, devicesRouter);
 app.use(requireWriteGuard, tagsRouter);
