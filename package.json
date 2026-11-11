@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "migrate": "node scripts/migrate-csv-to-sqlite.js",
-    "test": "node --test 'tests/**/*.test.js'",
+    "test": "node --test tests/*.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
