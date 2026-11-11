@@ -47,35 +47,4 @@ router.post('/api/status/:id/refresh', async (req, res) => {
   res.json({ id, online });
 });
 
-router.get('/api/status/stream', (req, res) => {
-  res.set({
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-  res.flushHeaders?.();
-
-  const poller = getPoller();
-  const send = (event, data) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  send('snapshot', poller.getSnapshot());
-
-  const onChange = (payload) => send('change', payload);
-  const onRemove = (payload) => send('remove', payload);
-  poller.on('change', onChange);
-  poller.on('remove', onRemove);
-
-  const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
-
-  req.on('close', () => {
-    clearInterval(ping);
-    poller.off('change', onChange);
-    poller.off('remove', onRemove);
-  });
-});
-
 module.exports = router;

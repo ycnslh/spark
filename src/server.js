@@ -17,6 +17,8 @@ const healthRouter = require('./routes/health');
 const statusRouter = require('./routes/status');
 const tagsRouter = require('./routes/tags');
 const dataRouter = require('./routes/data');
+const { createEventsRouter } = require('./routes/events');
+const eventsRouter = createEventsRouter();
 
 const app = express();
 
@@ -61,6 +63,7 @@ app.use('/api/devices', requireWriteGuard, devicesRouter);
 app.use(requireWriteGuard, tagsRouter);
 app.use(requireWriteGuard, dataRouter);
 app.use(statusRouter);
+app.use(eventsRouter);
 app.use(wakeRouter);
 
 app.use((err, _req, res, _next) => {
@@ -85,9 +88,13 @@ function start() {
     });
   });
 
+  let shuttingDown = false;
   const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     logger.info(`Received ${signal}, shutting down`);
     poller.stop();
+    eventsRouter.closeAll();
     server.close(() => {
       closeDb();
       process.exit(0);
@@ -95,6 +102,7 @@ function start() {
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+  return server;
 }
 
 if (require.main === module) {

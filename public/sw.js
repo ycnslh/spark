@@ -1,4 +1,4 @@
-const CACHE_NAME = 'spark-v2';
+const CACHE_NAME = 'spark-v3';
 const ASSETS = [
   '/',
   '/style.css',

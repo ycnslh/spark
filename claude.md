@@ -80,6 +80,7 @@ spark/
   - `GET /api/devices/:id/tokens` — Métadonnées seulement, jamais de secret ni hash
   - `DELETE /api/devices/:id/tokens/:tokenId` — Révocation propre à cet appareil
   - `GET /api/devices/:id/history`
+  - `GET /api/events` — SSE authentifié : snapshot, status, remove, wake ; heartbeat 25 s
   - `GET /api/status` — online/offline (IP explicite, host, puis IPv4 en description)
   - `POST /api/wake/:mac` — Réveil JSON
   - `GET /wake/:nom?token=…` — Réveil HTML sans Basic ni origine seulement avec un token actif du bon appareil (nom, MAC ou id)
@@ -136,4 +137,9 @@ Quand l'utilisateur pose des questions :
 - Le limiteur de réveil s'applique aux tokens ; `last_used_at` est mis à jour pour un réveil autorisé et l'historique contient `triggered_by=token:<label ou id>`, y compris si l'envoi UDP échoue.
 - L'exception User-Agent `Shortcuts` a été supprimée de `sameOrigin` : sans token, même les raccourcis doivent fournir une origine valide et Basic Auth si activée. Les écritures de gestion des tokens conservent les gardes existantes.
 - Le logger masque les query strings, y compris dans les erreurs, ainsi que les champs sensibles. Helmet conserve `Referrer-Policy: no-referrer` et la CSP existante. HTTPS est recommandé et les logs du reverse proxy sont à configurer séparément.
-- Le frontend conserve seulement en mémoire le secret nouvellement créé, le masque après fermeture du panneau et propose copie/liste/révocation par appareil. Les données utilisateur sont affichées via `textContent` ; ne pas ajouter de script inline. Le cache PWA version 2 distribue la nouvelle interface sans y stocker les réponses API ou de réveil.
+- Le frontend conserve seulement en mémoire le secret nouvellement créé, le masque après fermeture du panneau et propose copie/liste/révocation par appareil. Les données utilisateur sont affichées via `textContent` ; ne pas ajouter de script inline. Le cache PWA version 3 distribue la nouvelle interface sans y stocker les réponses API ou de réveil.
+
+- SSE : `src/routes/events.js` expose `/api/events` derrière Basic Auth ; l’ancien `/api/status/stream` reste compatible (`change` au lieu de `status`). `SSE_MAX_CLIENTS` (défaut 20, entier positif) limite les deux routes ensemble, avec une réponse 503 française au-delà. Désactiver le buffering du reverse proxy (`proxy_buffering off` sous Nginx), respecter `X-Accel-Buffering: no` et un délai de lecture supérieur au heartbeat de 25 s.
+- Le bus partagé `src/services/eventBus.js` transporte `wake` : `{type: 'wake', deviceId, state}` (`sent`, `confirmed`, `timeout`, `failed`). Les événements `change`/`remove` du poller sont reliés au flux sans modifier leur contrat ; la persistance de `ping_confirmed` reste identique. Sans adresse de sonde, seul `sent` est émis.
+- `createEventsRouter` accepte `poller`, `bus`, `maxClients`, `heartbeatMs` pour les tests sans réseau. Un seul listener par source est partagé entre les clients ; la dernière fermeture retire les listeners et chaque fermeture annule son heartbeat. `closeAll()` ferme les flux avant `server.close()` sur SIGINT/SIGTERM ; les délais d’inactivité sont désactivés par flux.
+- Le frontend EventSource utilise `/api/events`, reconnecte automatiquement, reprend le sondage pendant les erreurs et applique un nouveau snapshot à la reconnexion ; les réveils en attente sont resynchronisés via l’historique. Les messages français passent par `textContent` et `aria-live="polite"`. Le service worker `spark-v3` exclut toujours toutes les routes `/api/`, y compris SSE ; conserver la CSP sans script inline.

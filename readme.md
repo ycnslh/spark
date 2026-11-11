@@ -45,6 +45,7 @@ Toutes les options sont dans [.env.example](.env.example) :
 | `AUTH_USER`           | (vide) | Utilisateur Basic Auth — si vide, auth désactivée                 |
 | `AUTH_PASS`           | (vide) | Mot de passe Basic Auth                                           |
 | `TRUST_PROXY`         | `0`    | Proxies de confiance pour les en-têtes transmis                   |
+| `SSE_MAX_CLIENTS`     | `20`   | Connexions SSE simultanées (entier strictement positif)           |
 | `WAKE_RATE_LIMIT`     | `10`   | Nombre max de réveils par minute par IP                           |
 | `WOL_BROADCAST`       | (vide) | Adresse cible unique, prioritaire sur la détection des interfaces |
 | `WOL_ALL_INTERFACES`  | `true` | Ajouter les broadcasts des interfaces IPv4 non internes           |
@@ -66,6 +67,10 @@ Pour un accès via un nom de domaine, configure un reverse proxy (par exemple Ng
 Le proxy doit conserver l'en-tête `Host` d'origine et remplacer les en-têtes `X-Forwarded-Proto` et `X-Forwarded-For` par le protocole et l'adresse du client. Cela permet notamment à la vérification d'origine et aux limites par IP de fonctionner derrière HTTPS.
 
 `TRUST_PROXY=0` reste adapté à un accès direct. Avec un proxy sur la même machine, utilise `TRUST_PROXY=loopback`. `TRUST_PROXY=1` convient si toutes les requêtes passent par exactement un proxy ; limite alors l'accès direct au port Spark au seul proxy. Adapte cette valeur à la topologie réelle pour que les clients ne puissent pas imposer leurs propres en-têtes transmis.
+
+Le flux `GET /api/events` utilise Server-Sent Events (SSE), sous la même Basic Auth que l’API. Il envoie un événement `snapshot` initial (`[{id, online}]`), puis `status` (`{id, online}`), `remove` (`{id}`) et `wake` (`{type: "wake", deviceId, state}` ; états `sent`, `confirmed`, `timeout`, `failed`). Un commentaire heartbeat maintient la connexion toutes les 25 secondes. Le plafond global `SSE_MAX_CLIENTS=20` inclut l’ancien endpoint compatible `/api/status/stream` ; au-delà, le serveur répond 503. À l’arrêt, les flux sont fermés avant le serveur HTTP.
+
+Désactive le buffering du reverse proxy pour `/api/events` (Nginx : `proxy_buffering off;`, Spark envoie aussi `X-Accel-Buffering: no`) et prévois un délai de lecture supérieur à 25 secondes. Le navigateur reprend automatiquement le sondage toutes les 30 secondes en cas de coupure, puis resynchronise les statuts à la reconnexion SSE. Les API, dont ce flux, sont exclues du cache du service worker.
 
 ## Migration depuis l'ancienne version (CSV)
 
@@ -137,6 +142,7 @@ docker-compose logs spark 1>/dev/null     # seulement WARN/ERROR
 | GET     | `/api/devices/:id/tokens`          | Liste les métadonnées des tokens, sans secret                                             |
 | DELETE  | `/api/devices/:id/tokens/:tokenId` | Révoque un token de cet appareil                                                          |
 | GET     | `/api/devices/:id/history`         | 20 derniers réveils                                                                       |
+| GET     | `/api/events`                      | Flux SSE authentifié de statut et de réveil                                               |
 | GET     | `/api/status`                      | Statut online/offline via IP, host ou ancienne description                                |
 | POST    | `/api/wake/:mac`                   | Réveille un appareil (réponse JSON)                                                       |
 | GET     | `/wake/:nom`                       | Réveille un appareil ; token valide de cet appareil ou Basic + origine                    |

@@ -2,6 +2,7 @@ const path = require('path');
 
 const rootDir = path.resolve(__dirname, '..');
 const wolRepeatDelayMs = Number(process.env.WOL_REPEAT_DELAY_MS ?? 2000);
+const sseMaxClients = Number(process.env.SSE_MAX_CLIENTS ?? 20);
 
 if (process.env.NODE_ENV === 'production' && process.env.AUTH_PASS === 'changeme') {
   throw new Error('AUTH_PASS=changeme est interdit en production. Configurez un mot de passe sûr.');
@@ -40,4 +41,5 @@ module.exports = {
   pingTimeoutMs: 60_000,
   pingIntervalMs: 5_000,
   statusPollMs: 30_000,
+  sseMaxClients: Number.isSafeInteger(sseMaxClients) && sseMaxClients > 0 ? sseMaxClients : 20,
 };

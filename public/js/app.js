@@ -24,6 +24,8 @@ let currentDevices = [];
 let searchTerm = '';
 // Secrets éphémères : aucune persistance dans le stockage du navigateur.
 const newTokenLinks = new Map();
+const statuses = new Map();
+const wakeStates = new Map();
 
 async function refresh() {
   try {
@@ -96,6 +98,7 @@ function renderDevices(devices) {
       <button class="glass-button wake-button" data-action="wake">
         <i class="fas fa-power-off" aria-hidden="true"></i>
       </button>
+      <p class="wake-state" role="status" aria-live="polite" aria-atomic="true"></p>
       <details class="token-panel">
         <summary>Raccourcis iPhone — tokens</summary>
         <form class="token-form form-group">
@@ -158,6 +161,8 @@ function renderDevices(devices) {
     const fresh = newTokenLinks.get(device.id);
     if (fresh) showCreatedToken(tokenPanel, device, fresh);
     devicesContainer.appendChild(card);
+    applyStatus(device.id, statuses.get(device.id) ?? null);
+    renderWakeState(device.id);
   }
 }
 
@@ -294,9 +299,11 @@ async function wakeDevice(device, button) {
   button.disabled = true;
   icon.className = 'fas fa-spinner fa-spin';
   button.classList.add('wake-sending');
+  setWakeState(device.id, 'sending');
 
   try {
     await api.wakeDevice(device.mac);
+    if (wakeStates.get(device.id) === 'sending') setWakeState(device.id, 'sent');
     icon.className = 'fas fa-check';
     button.classList.remove('wake-sending');
     button.classList.add('wake-success');
@@ -307,6 +314,7 @@ async function wakeDevice(device, button) {
       button.disabled = false;
     }, 3000);
   } catch (err) {
+    setWakeState(device.id, 'failed');
     icon.className = 'fas fa-exclamation-circle';
     button.classList.remove('wake-sending');
     button.classList.add('wake-error');
@@ -337,9 +345,7 @@ async function refreshDeviceStatus(device, card) {
   dot.classList.add('checking');
   try {
     const { online } = await api.refreshStatus(device.id);
-    dot.classList.remove('online', 'offline', 'checking');
-    if (online === true) dot.classList.add('online');
-    else if (online === false) dot.classList.add('offline');
+    applyStatus(device.id, online);
   } catch {
     dot.classList.remove('checking');
     toast('Erreur de vérification', 'error');
@@ -388,12 +394,45 @@ async function toggleHistory(card, device) {
 }
 
 function applyStatus(id, online) {
+  if (!Number.isInteger(id)) return;
+  statuses.set(id, online);
   const card = devicesContainer.querySelector(`[data-device-id="${id}"]`);
   if (!card) return;
   const dot = card.querySelector('.status-dot');
   dot.classList.remove('online', 'offline', 'checking');
   if (online === true) dot.classList.add('online');
   else if (online === false) dot.classList.add('offline');
+  dot.title =
+    online === true
+      ? 'En ligne — cliquer pour rafraîchir'
+      : online === false
+        ? 'Hors ligne — cliquer pour rafraîchir'
+        : 'État inconnu — cliquer pour rafraîchir';
+}
+
+function setWakeState(id, state) {
+  if (!Number.isInteger(id)) return;
+  wakeStates.set(id, state);
+  renderWakeState(id);
+  if (state === 'confirmed') applyStatus(id, true);
+}
+
+function renderWakeState(id) {
+  const card = devicesContainer.querySelector(`[data-device-id="${id}"]`);
+  if (!card) return;
+  const device = currentDevices.find((d) => d.id === id);
+  const hasHost =
+    device?.ip || device?.host || /\b(?:\d{1,3}\.){3}\d{1,3}\b/.test(device?.description || '');
+  const labels = {
+    sending: 'Envoi du réveil en cours…',
+    sent: hasHost
+      ? 'Réveil envoyé — en attente de confirmation…'
+      : 'Réveil envoyé — aucune adresse de confirmation configurée.',
+    confirmed: 'Réveil confirmé — appareil en ligne.',
+    timeout: 'Délai de confirmation dépassé.',
+    failed: 'Échec de l’envoi du réveil.',
+  };
+  card.querySelector('.wake-state').textContent = labels[wakeStates.get(id)] || '';
 }
 
 let pollTimer = null;
@@ -401,46 +440,90 @@ async function pollStatus() {
   if (document.visibilityState === 'hidden') return;
   try {
     const statuses = await api.getStatus();
+    if (eventSource && eventSource.readyState === 1) return;
     for (const { id, online } of statuses) applyStatus(id, online);
+    syncPendingWakes();
   } catch {
     /* silencieux: la home doit fonctionner même si /api/status échoue */
   }
 }
 
+async function syncPendingWakes() {
+  for (const [id, state] of wakeStates) {
+    if (state !== 'sent') continue;
+    try {
+      const [latest] = await api.getHistory(id, 1);
+      if (wakeStates.get(id) !== state || !latest) continue;
+      if (latest.ping_confirmed === 1) setWakeState(id, 'confirmed');
+      else if (latest.ping_confirmed === 0) setWakeState(id, 'timeout');
+      else if (!latest.success) setWakeState(id, 'failed');
+    } catch {
+      /* Le prochain sondage ou la reconnexion réessaiera. */
+    }
+  }
+}
+
 let eventSource = null;
+let streamRetryTimer = null;
 function startStream() {
   if (eventSource || !('EventSource' in window)) {
     if (!eventSource) startPolling();
     return;
   }
   try {
-    eventSource = new EventSource('/api/status/stream');
+    eventSource = new EventSource('/api/events');
   } catch {
     startPolling();
     return;
   }
   eventSource.addEventListener('snapshot', (e) => {
     const list = JSON.parse(e.data);
+    statuses.clear();
+    for (const device of currentDevices) applyStatus(device.id, null);
     for (const { id, online } of list) applyStatus(id, online);
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
+    syncPendingWakes();
   });
-  eventSource.addEventListener('change', (e) => {
+  eventSource.addEventListener('status', (e) => {
     const { id, online } = JSON.parse(e.data);
     applyStatus(id, online);
   });
+  eventSource.addEventListener('remove', (e) => {
+    const { id } = JSON.parse(e.data);
+    statuses.delete(id);
+    wakeStates.delete(id);
+    newTokenLinks.delete(id);
+    currentDevices = currentDevices.filter((device) => device.id !== id);
+    renderAll();
+  });
+  eventSource.addEventListener('wake', (e) => {
+    const { deviceId, state } = JSON.parse(e.data);
+    setWakeState(deviceId, state);
+  });
+  // EventSource se reconnecte seul ; le snapshot resynchronise les pastilles.
   eventSource.addEventListener('error', () => {
-    eventSource?.close();
-    eventSource = null;
     startPolling();
+    if (eventSource?.readyState === 2) {
+      eventSource.close();
+      eventSource = null;
+      streamRetryTimer = setTimeout(() => {
+        streamRetryTimer = null;
+        startStream();
+      }, 5000);
+    }
   });
 }
 
 function startPolling() {
-  if (pollTimer) clearInterval(pollTimer);
+  if (pollTimer) return;
   pollTimer = setInterval(pollStatus, 30_000);
   pollStatus();
 }
 
 function stopAll() {
+  if (streamRetryTimer) clearTimeout(streamRetryTimer);
+  streamRetryTimer = null;
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
   if (eventSource) {

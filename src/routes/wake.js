@@ -10,15 +10,23 @@ const { resolveDeviceHost } = require('../utils/deviceHost');
 const logger = require('../utils/logger');
 const config = require('../config');
 const tokenStore = require('../services/tokenStore');
+const eventBus = require('../services/eventBus');
 
 const router = express.Router();
 const requireSameOrigin = sameOrigin();
 
 async function performWake(device, triggeredBy) {
-  await sendWakeOnLan(
-    device.mac,
-    device.broadcast ? { broadcasts: [device.broadcast] } : undefined
-  );
+  const emitWake = (state) => eventBus.emit('wake', { type: 'wake', deviceId: device.id, state });
+  try {
+    await sendWakeOnLan(
+      device.mac,
+      device.broadcast ? { broadcasts: [device.broadcast] } : undefined
+    );
+  } catch (err) {
+    emitWake('failed');
+    throw err;
+  }
+  emitWake('sent');
   const result = store.recordWake({ deviceId: device.id, triggeredBy, success: true });
   const host = resolveDeviceHost(device);
   if (host) {
@@ -27,7 +35,10 @@ async function performWake(device, triggeredBy) {
       intervalMs: config.pingIntervalMs,
       probePort: device.probe_port,
     })
-      .then((up) => store.setLastPingResult(result.lastInsertRowid, up))
+      .then((up) => {
+        store.setLastPingResult(result.lastInsertRowid, up);
+        emitWake(up ? 'confirmed' : 'timeout');
+      })
       .catch((err) => logger.warn('Ping poll failed', { error: err.message }));
   }
 }
