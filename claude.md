@@ -72,10 +72,11 @@ spark/
 - **Frontend** : `public/index.html` + `public/js/app.js`
 - **API endpoints** :
   - `GET /api/devices` — Liste
-  - `POST /api/devices` — Ajout (body : `{ name, mac, description? }`)
+  - `POST /api/devices` — Ajout (body : `{ name, mac, description?, host?, ip?, broadcast?, probe_port? }`)
+  - `PATCH /api/devices/:id` — Modification du nom, de la description, du host et des champs réseau
   - `DELETE /api/devices/:mac`
   - `GET /api/devices/:id/history`
-  - `GET /api/status` — online/offline (basé sur l'IP en description)
+  - `GET /api/status` — online/offline (IP explicite, host, puis IPv4 en description)
   - `POST /api/wake/:mac` — Réveil JSON
   - `GET /wake/:nom` — Réveil HTML (raccourcis iOS)
   - `GET /health` — Healthcheck (bypass auth)
@@ -121,4 +122,6 @@ Quand l'utilisateur pose des questions :
 - Les MAC sont stockées au format `aa:bb:cc:dd:ee:ff` après normalisation
 - L'application est en français (interface et documentation)
 - L'auth Basic est désactivée si `AUTH_USER`/`AUTH_PASS` sont vides (utile en dev)
-- Si la `description` d'un appareil contient une IPv4, elle est utilisée pour le ping/probe — c'est comme ça qu'on détecte online/offline
+- Le champ `ip` IPv4 est prioritaire pour le ping/probe, suivi du `host` existant puis de la première IPv4 valide en description. La migration SQLite version 1 ajoute `ip`, `broadcast`, `probe_port` et reprend une fois les IP des anciennes descriptions sans les modifier.
+- `probe_port` limite les sondes TCP à un port ; sinon 22/3389/445/80 sont sondés en parallèle après échec ICMP. Le `broadcast` de l'appareil remplace les cibles WoL globales.
+- Sauvegarder `data/spark.db` de façon cohérente avant mise à jour ; les tests de migration utilisent une base temporaire, pas une base de production.

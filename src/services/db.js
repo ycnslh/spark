@@ -2,6 +2,7 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const config = require('../config');
 const logger = require('../utils/logger');
+const { extractIPv4 } = require('../utils/ipv4');
 
 let db = null;
 
@@ -12,6 +13,9 @@ const SCHEMA = `
     mac TEXT NOT NULL UNIQUE,
     host TEXT,
     description TEXT,
+    ip TEXT,
+    broadcast TEXT,
+    probe_port INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -51,10 +55,25 @@ function addColumnIfMissing(database, table, column, definition) {
 }
 
 function initSchema(database) {
-  database.exec(SCHEMA);
-  // Compat avec d'anciens volumes créés avant l'ajout de ces colonnes
-  addColumnIfMissing(database, 'devices', 'host', 'TEXT');
-  addColumnIfMissing(database, 'wake_history', 'confirmed_at', 'TEXT');
+  database.transaction(() => {
+    database.exec(SCHEMA);
+    // Compat avec d'anciens volumes créés avant l'ajout de ces colonnes
+    addColumnIfMissing(database, 'devices', 'host', 'TEXT');
+    addColumnIfMissing(database, 'wake_history', 'confirmed_at', 'TEXT');
+    addColumnIfMissing(database, 'devices', 'ip', 'TEXT');
+    addColumnIfMissing(database, 'devices', 'broadcast', 'TEXT');
+    addColumnIfMissing(database, 'devices', 'probe_port', 'INTEGER');
+    if (database.pragma('user_version', { simple: true }) < 1) {
+      const update = database.prepare('UPDATE devices SET ip = ? WHERE id = ? AND ip IS NULL');
+      for (const device of database
+        .prepare('SELECT id, description FROM devices WHERE ip IS NULL')
+        .all()) {
+        const ip = extractIPv4(device.description);
+        if (ip) update.run(ip, device.id);
+      }
+      database.pragma('user_version = 1');
+    }
+  })();
 }
 
 function getDb() {

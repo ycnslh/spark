@@ -5,7 +5,7 @@ Spark est une application web légère qui permet de réveiller des ordinateurs 
 ## Fonctionnalités
 
 - Interface web responsive, installable comme PWA
-- Gestion des appareils (ajout, suppression, description / IP)
+- Gestion des appareils (ajout, modification, suppression, IP et description séparées)
 - Envoi de paquets Wake-on-LAN (broadcast UDP port 9)
 - Statut online/offline en temps réel via ping ICMP / TCP probe (si une IP est configurée)
 - Historique des réveils par appareil avec confirmation post-ping
@@ -55,6 +55,8 @@ L'authentification est désactivée dès que `AUTH_USER` ou `AUTH_PASS` est vide
 
 Par défaut, Spark envoie le paquet magique aux broadcasts dirigés de chaque interface IPv4 non interne (calculés à partir de l'adresse et du masque), ainsi qu'à `255.255.255.255`, sans doublons. Avec `WOL_ALL_INTERFACES=false`, seul `255.255.255.255` est utilisé. Si `WOL_BROADCAST` est défini (par exemple `192.168.1.255`), cette adresse devient la seule cible, quelle que soit la valeur de `WOL_ALL_INTERFACES`. Ces réglages sont globaux pour tous les appareils.
 
+Un broadcast IPv4 renseigné dans les options avancées d'un appareil remplace ces réglages globaux pour cet appareil uniquement, y compris pour le second envoi.
+
 Le premier envoi réussit dès lors qu'au moins une cible accepte l'envoi UDP ; cela ne garantit pas que l'appareil s'est réveillé. Après ce premier envoi, Spark programme un second envoi après `WOL_REPEAT_DELAY_MS`, sans retarder la réponse HTTP ni la faire échouer. Ses résultats et les erreurs par cible sont journalisés au niveau `debug`. Utilise `WOL_REPEAT_DELAY_MS=0` pour désactiver cette répétition.
 
 ## Reverse proxy HTTPS
@@ -89,8 +91,11 @@ Le script lit `devices.csv` et insère les appareils dans `data/spark.db`. Les d
 ### Ajouter un appareil
 
 1. Bouton "Ajouter un appareil"
-2. Saisis nom, MAC (format libre — `XX:XX:XX:XX:XX:XX` ou `XXXXXXXXXXXX`) et optionnellement une IP en description.
-3. Si tu mets une IP, Spark va l'utiliser pour vérifier l'état online/offline et confirmer les réveils via ping/TCP probe.
+2. Saisis nom, MAC (format libre — `XX:XX:XX:XX:XX:XX` ou `XXXXXXXXXXXX`) et optionnellement une adresse IPv4 dans le champ IP.
+3. Spark utilise cette IP pour vérifier l'état online/offline et confirmer les réveils. Le ping ICMP est essayé d'abord ; en cas d'échec, les sondes TCP sont lancées en parallèle sur 22, 3389, 445 et 80, et s'arrêtent au premier succès. Un port de sonde configuré (entier de 1 à 65535) remplace cette liste.
+4. Dans les options réseau avancées, renseigne éventuellement le broadcast IPv4 propre à l'appareil ou conserve un host de secours (IPv4, IPv6 ou nom d'hôte). Le bouton crayon permet de modifier ces champs ensuite ; laisse un champ vide pour l'effacer.
+
+L'ordre de résolution est : IP explicite, host existant, puis première IPv4 valide dans la description. Au premier démarrage après mise à jour, Spark ajoute automatiquement les colonnes `ip`, `broadcast` et `probe_port` à SQLite et copie la première IPv4 valide des anciennes descriptions vers `ip`, sans modifier les descriptions. Cette migration s'exécute une seule fois ; effacer une IP plus tard ne relance pas cette copie. Les anciens exports JSON restent importables ; les nouveaux exports incluent les trois champs.
 
 ### Raccourcis iPhone
 
@@ -115,16 +120,17 @@ docker-compose logs spark 1>/dev/null     # seulement WARN/ERROR
 
 ## Endpoints API
 
-| Méthode | Route                      | Description                                           |
-| ------- | -------------------------- | ----------------------------------------------------- |
-| GET     | `/api/devices`             | Liste les appareils                                   |
-| POST    | `/api/devices`             | Ajoute un appareil — `{ name, mac, description? }`    |
-| DELETE  | `/api/devices/:mac`        | Supprime un appareil                                  |
-| GET     | `/api/devices/:id/history` | 20 derniers réveils                                   |
-| GET     | `/api/status`              | Statut online/offline (basé sur l'IP en description)  |
-| POST    | `/api/wake/:mac`           | Réveille un appareil (réponse JSON)                   |
-| GET     | `/wake/:nom`               | Réveille un appareil (réponse HTML, idéal raccourcis) |
-| GET     | `/health`                  | Healthcheck (bypass auth)                             |
+| Méthode | Route                      | Description                                                                               |
+| ------- | -------------------------- | ----------------------------------------------------------------------------------------- |
+| GET     | `/api/devices`             | Liste les appareils                                                                       |
+| POST    | `/api/devices`             | Ajoute un appareil — `{ name, mac, description?, host?, ip?, broadcast?, probe_port? }`   |
+| PATCH   | `/api/devices/:id`         | Modifie nom, description, host et champs réseau ; `null` efface un champ réseau optionnel |
+| DELETE  | `/api/devices/:mac`        | Supprime un appareil                                                                      |
+| GET     | `/api/devices/:id/history` | 20 derniers réveils                                                                       |
+| GET     | `/api/status`              | Statut online/offline via IP, host ou ancienne description                                |
+| POST    | `/api/wake/:mac`           | Réveille un appareil (réponse JSON)                                                       |
+| GET     | `/wake/:nom`               | Réveille un appareil (réponse HTML, idéal raccourcis)                                     |
+| GET     | `/health`                  | Healthcheck (bypass auth)                                                                 |
 
 ## Architecture
 
@@ -157,6 +163,8 @@ npm test                   # tests (node --test, supertest)
 ```
 
 ## Mises à jour
+
+Sauvegarde `data/spark.db` avant toute mise à jour, avec une sauvegarde SQLite cohérente (API de sauvegarde SQLite, ou application arrêtée). La migration automatique doit être validée sur une copie de ta base avant une mise à jour en production.
 
 ```bash
 git pull

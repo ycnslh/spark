@@ -4,6 +4,7 @@ const tagStore = require('../services/tagStore');
 const { isValidMac, formatMac } = require('../utils/mac');
 const { isSafeHost } = require('../services/pinger');
 const logger = require('../utils/logger');
+const { validateNetworkFields } = require('../utils/ipv4');
 
 const NAME_REGEX = /^[\p{L}\p{N} _.-]{1,50}$/u;
 const router = express.Router();
@@ -33,7 +34,9 @@ router.get('/', (_req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { name, mac, host, description } = req.body || {};
+  const { name, mac, host, description, ip, broadcast, probe_port } = req.body || {};
+  const networkErr = validateNetworkFields({ ip, broadcast, probe_port });
+  if (networkErr) return res.status(400).json({ success: false, message: networkErr });
 
   if (!name || !mac) {
     return res.status(400).json({ success: false, message: 'Nom et adresse MAC requis' });
@@ -68,6 +71,9 @@ router.post('/', (req, res) => {
       mac: formatMac(mac),
       host: host?.trim() || null,
       description: description?.trim() || null,
+      ip: ip || null,
+      broadcast: broadcast || null,
+      probe_port: probe_port ?? null,
     });
     logger.info('Device created', { id: device.id, name: device.name });
     return res.status(201).json({ success: true, device });
@@ -78,13 +84,16 @@ router.post('/', (req, res) => {
 });
 
 router.patch('/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (Number.isNaN(id)) return res.status(400).json({ success: false, message: 'ID invalide' });
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id < 1)
+    return res.status(400).json({ success: false, message: 'ID invalide' });
   const existing = store.findById(id);
   if (!existing) return res.status(404).json({ success: false, message: 'Appareil non trouvé' });
 
-  const { name, host, description } = req.body || {};
-  const update = {};
+  const { name, host, description, ip, broadcast, probe_port } = req.body || {};
+  const networkErr = validateNetworkFields({ ip, broadcast, probe_port });
+  if (networkErr) return res.status(400).json({ success: false, message: networkErr });
+  const update = { ip, broadcast, probe_port };
 
   if (name !== undefined) {
     const err = validateName(name);

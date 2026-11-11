@@ -103,18 +103,62 @@
             <div class="hint">Format XX:XX:XX:XX:XX:XX ou XXXXXXXXXXXX</div>
           </div>
           <div class="form-group">
-            <label for="device-host">Host (IP ou hostname, optionnel)</label>
+            <label for="device-ip">Adresse IP (IPv4, optionnel)</label>
             <input
               type="text"
-              id="device-host"
-              maxlength="253"
+              id="device-ip"
+              maxlength="15"
               placeholder="192.168.1.42"
               autocomplete="off"
             />
             <div class="hint">
-              Utilisé pour vérifier le statut online/offline. Laisser vide si non applicable.
+              Adresse utilisée en priorité pour vérifier le statut et confirmer les réveils.
             </div>
           </div>
+          <div class="form-group">
+            <label for="device-probe_port">Port de sonde TCP (optionnel)</label>
+            <input
+              type="number"
+              id="device-probe_port"
+              min="1"
+              max="65535"
+              step="1"
+              placeholder="Ex. 3389"
+            />
+            <div class="hint">
+              Vide : sondes sur les ports 22, 3389, 445 et 80 après le ping ICMP.
+            </div>
+          </div>
+          <details id="device-network-options" class="network-options">
+            <summary>Options réseau avancées</summary>
+            <div class="form-group">
+              <label for="device-broadcast">Broadcast IPv4 (optionnel)</label>
+              <input
+                type="text"
+                id="device-broadcast"
+                maxlength="15"
+                placeholder="192.168.1.255"
+                autocomplete="off"
+              />
+              <div class="hint">
+                Vide : réglages globaux. Renseigné : seule cette cible reçoit les paquets de cet
+                appareil.
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="device-host">Host de secours (IP ou hostname, optionnel)</label>
+              <input
+                type="text"
+                id="device-host"
+                maxlength="253"
+                placeholder="192.168.1.42"
+                autocomplete="off"
+              />
+              <div class="hint">
+                Utilisé si l’adresse IP est vide, avant l’ancienne IP en description.
+              </div>
+            </div>
+          </details>
           <div class="form-group">
             <label for="device-description">Description (optionnel)</label>
             <textarea

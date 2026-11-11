@@ -57,7 +57,7 @@ function listDevicesWithTags() {
   const db = getDb();
   const devices = db
     .prepare(
-      'SELECT id, name, mac, host, description, created_at FROM devices ORDER BY name COLLATE NOCASE'
+      'SELECT id, name, mac, host, description, ip, broadcast, probe_port, created_at FROM devices ORDER BY name COLLATE NOCASE'
     )
     .all();
   const links = db

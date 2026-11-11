@@ -14,11 +14,18 @@ const router = express.Router();
 const requireSameOrigin = sameOrigin();
 
 async function performWake(device, triggeredBy) {
-  await sendWakeOnLan(device.mac);
+  await sendWakeOnLan(
+    device.mac,
+    device.broadcast ? { broadcasts: [device.broadcast] } : undefined
+  );
   const result = store.recordWake({ deviceId: device.id, triggeredBy, success: true });
   const host = resolveDeviceHost(device);
   if (host) {
-    pollUntilUp(host, { totalMs: config.pingTimeoutMs, intervalMs: config.pingIntervalMs })
+    pollUntilUp(host, {
+      totalMs: config.pingTimeoutMs,
+      intervalMs: config.pingIntervalMs,
+      probePort: device.probe_port,
+    })
       .then((up) => store.setLastPingResult(result.lastInsertRowid, up))
       .catch((err) => logger.warn('Ping poll failed', { error: err.message }));
   }

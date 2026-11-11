@@ -33,7 +33,9 @@ class StatusPoller extends EventEmitter {
       devices.map(async (d) => {
         seen.add(d.id);
         const host = resolveDeviceHost(d);
-        const online = host ? await isHostUp(host, { timeoutMs: this.timeoutMs }) : null;
+        const online = host
+          ? await isHostUp(host, { timeoutMs: this.timeoutMs, probePort: d.probe_port })
+          : null;
         this.setStatus(d.id, online);
       })
     );

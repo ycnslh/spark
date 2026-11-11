@@ -6,6 +6,7 @@ import {
   copyToClipboard,
   formatMac,
   formatDate,
+  focusableElements,
 } from './ui.js';
 
 const devicesContainer = document.getElementById('devices-container');
@@ -39,6 +40,7 @@ function filteredDevices() {
   return currentDevices.filter(
     (d) =>
       d.name.toLowerCase().includes(q) ||
+      (d.ip || '').includes(q) ||
       (d.host || '').toLowerCase().includes(q) ||
       (d.description || '').toLowerCase().includes(q) ||
       d.mac.toLowerCase().includes(q)
@@ -85,6 +87,7 @@ function renderDevices(devices) {
         </div>
       </div>
       <div class="device-mac"></div>
+      <div class="device-ip"></div>
       <div class="device-host"></div>
       <div class="device-desc"></div>
       <div class="device-tags"></div>
@@ -95,6 +98,7 @@ function renderDevices(devices) {
 
     card.querySelector('.device-name span:last-child').textContent = device.name;
     card.querySelector('.device-mac').textContent = formatMac(device.mac);
+    card.querySelector('.device-ip').textContent = device.ip ? `IP : ${device.ip}` : '';
     card.querySelector('.device-host').textContent = device.host || '';
     card.querySelector('.device-desc').textContent = device.description || '';
     const tagsContainer = card.querySelector('.device-tags');
@@ -258,7 +262,8 @@ async function toggleHistory(card, device) {
     panel.innerHTML = '';
     panel.appendChild(ul);
   } catch (err) {
-    panel.innerHTML = `<p class="ko">Erreur: ${err.message}</p>`;
+    panel.innerHTML = '<p class="ko"></p>';
+    panel.querySelector('p').textContent = `Erreur: ${err.message}`;
   }
 }
 
@@ -337,9 +342,7 @@ let lastFocusedBeforeModal = null;
 
 function trapTab(e) {
   if (e.key !== 'Tab' || !modal.classList.contains('open')) return;
-  const focusables = modal.querySelectorAll(
-    'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-  );
+  const focusables = focusableElements(modal);
   if (focusables.length === 0) return;
   const first = focusables[0];
   const last = focusables[focusables.length - 1];
@@ -354,6 +357,11 @@ function trapTab(e) {
 
 function openModal({ edit = null } = {}) {
   lastFocusedBeforeModal = document.activeElement;
+  addDeviceForm.reset();
+  document.getElementById('device-network-options').open = false;
+  for (const field of ['ip', 'broadcast', 'probe_port']) {
+    document.getElementById(`device-${field}`).value = edit?.[field] ?? '';
+  }
   if (edit) {
     modalTitle.textContent = "Modifier l'appareil";
     submitDeviceBtn.innerHTML = '<i class="fas fa-save" aria-hidden="true"></i> Enregistrer';
@@ -410,12 +418,17 @@ addDeviceForm.addEventListener('submit', async (event) => {
   const mac = document.getElementById('device-mac').value.trim();
   const host = document.getElementById('device-host').value.trim();
   const description = document.getElementById('device-description').value.trim();
+  const ip = document.getElementById('device-ip').value.trim();
+  const broadcast = document.getElementById('device-broadcast').value.trim();
+  const port = document.getElementById('device-probe_port').value;
+  const probe_port = port === '' ? null : Number(port);
+  const payload = { name, host, description, ip, broadcast, probe_port };
   try {
     if (id) {
-      await api.updateDevice(parseInt(id, 10), { name, host, description });
+      await api.updateDevice(parseInt(id, 10), payload);
       toast('Appareil modifié', 'success');
     } else {
-      await api.createDevice({ name, mac, host, description });
+      await api.createDevice({ ...payload, mac });
       toast('Appareil ajouté', 'success');
     }
     closeModal();

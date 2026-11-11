@@ -74,3 +74,48 @@ test('POST /api/import rejects unknown version', async () => {
   const res = await auth(request(app).post('/api/import')).send({ version: 99 });
   assert.equal(res.status, 400);
 });
+
+test('export/import round trip preserves network fields', async () => {
+  const fields = { ip: '10.0.0.42', broadcast: '10.0.0.255', probe_port: 1 };
+  store.createDevice({ name: 'pc', mac: 'aa:bb:cc:dd:ee:ff', ...fields });
+  const exported = await request(app).get('/api/export');
+  for (const [key, value] of Object.entries(fields))
+    assert.equal(exported.body.devices[0][key], value);
+  getDb().exec('DELETE FROM devices');
+  const imported = await auth(request(app).post('/api/import')).send(exported.body);
+  assert.equal(imported.status, 200);
+  assert.equal(imported.body.stats.devices, 1);
+  for (const [key, value] of Object.entries(fields))
+    assert.equal(store.listDevices()[0][key], value);
+});
+
+test('old exports without network fields still import and resolve their description IP', async () => {
+  const payload = {
+    version: 1,
+    devices: [{ name: 'legacy', mac: 'aa:bb:cc:dd:ee:ff', description: 'Bureau 192.168.1.42' }],
+  };
+  const imported = await auth(request(app).post('/api/import')).send(payload);
+  assert.equal(imported.status, 200);
+  assert.equal(imported.body.stats.devices, 1);
+  const device = store.listDevices()[0];
+  for (const field of ['ip', 'broadcast', 'probe_port']) assert.equal(device[field], null);
+  assert.equal(require('../src/utils/deviceHost').resolveDeviceHost(device), '192.168.1.42');
+});
+
+test('import skips invalid network fields using the existing invalid-entry contract', async () => {
+  const fields = [
+    { ip: '999.1.1.1' },
+    { broadcast: 'nas.local' },
+    { probe_port: '22' },
+    { probe_port: 0 },
+  ];
+  const devices = fields.map((network, i) => ({
+    name: `pc${i}`,
+    mac: `aa:bb:cc:dd:ee:0${i}`,
+    ...network,
+  }));
+  const res = await auth(request(app).post('/api/import')).send({ version: 1, devices });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.stats.devices, 0);
+  assert.equal(res.body.stats.skipped, fields.length);
+});
