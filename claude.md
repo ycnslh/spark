@@ -4,7 +4,7 @@
 
 **Spark** est une application web permettant de réveiller des ordinateurs à distance via le protocole Wake-on-LAN (WoL). Elle tourne dans un conteneur Docker (typiquement sur un Raspberry Pi) et offre une interface PWA installable, des liens directs pour les raccourcis iOS, du monitoring online/offline et un historique des réveils.
 
-> Note : le projet s'appelait "NetArise" à l'origine, renommé en "Spark" en avril 2026. Quelques anciens artefacts (notamment le dossier local `netarise/` et `devices.csv`) peuvent encore traîner pendant une phase de transition.
+> Note : le projet s'appelait "NetArise" à l'origine, renommé en "Spark" en avril 2026. L'ancien fichier `devices.csv` peut encore être présent avant sa migration vers SQLite.
 
 ## Objectif éducatif
 
@@ -36,7 +36,7 @@ Ce projet est à but d'apprentissage. L'utilisateur souhaite comprendre et maît
 ## Structure du projet
 
 ```
-spark/                              # (dossier local actuel: netarise/)
+spark/
 ├── src/
 │   ├── server.js                   # Bootstrap Express + lifecycle
 │   ├── config.js                   # Variables d'env centralisées

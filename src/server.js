@@ -54,14 +54,8 @@ const requireWriteGuard = (req, res, next) => {
 
 app.use(express.static(config.publicDir));
 app.use('/api/devices', requireWriteGuard, devicesRouter);
-app.use((req, res, next) => {
-  if (req.method === 'GET' || req.method === 'HEAD') return next();
-  return requireWriteGuard(req, res, next);
-}, tagsRouter);
-app.use((req, res, next) => {
-  if (req.method === 'GET' || req.method === 'HEAD') return next();
-  return requireWriteGuard(req, res, next);
-}, dataRouter);
+app.use(requireWriteGuard, tagsRouter);
+app.use(requireWriteGuard, dataRouter);
 app.use(statusRouter);
 app.use(wakeRouter);
 
@@ -71,6 +65,12 @@ app.use((err, _req, res, _next) => {
 });
 
 function start() {
+  if (!config.auth.user || !config.auth.pass) {
+    logger.warn(
+      'Authentification désactivée : configurez AUTH_USER et AUTH_PASS pour protéger l’accès à Spark.'
+    );
+  }
+
   getDb();
   const poller = getPoller({ intervalMs: config.statusPollMs, timeoutMs: 800 });
   poller.start();

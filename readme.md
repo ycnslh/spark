@@ -22,7 +22,7 @@ Spark est une application web légère qui permet de réveiller des ordinateurs 
 ## Installation
 
 ```bash
-git clone https://github.com/soulkill3r/Spark.git spark
+git clone https://github.com/ycnslh/spark.git
 cd spark
 
 # Crée ton .env (au minimum les credentials)
@@ -44,7 +44,18 @@ Toutes les options sont dans [.env.example](.env.example) :
 | `LOG_LEVEL`       | `info` | `debug` / `info` / `warn` / `error`               |
 | `AUTH_USER`       | (vide) | Utilisateur Basic Auth — si vide, auth désactivée |
 | `AUTH_PASS`       | (vide) | Mot de passe Basic Auth                           |
+| `TRUST_PROXY`     | `0`    | Proxies de confiance pour les en-têtes transmis   |
 | `WAKE_RATE_LIMIT` | `10`   | Nombre max de réveils par minute par IP           |
+
+L'authentification est désactivée dès que `AUTH_USER` ou `AUTH_PASS` est vide ; Spark journalise alors un avertissement au démarrage. Configure les deux valeurs pour protéger l'accès. Avec `NODE_ENV=production`, le mot de passe `changeme` empêche le démarrage.
+
+## Reverse proxy HTTPS
+
+Pour un accès via un nom de domaine, configure un reverse proxy (par exemple Nginx ou Caddy) qui termine HTTPS et transmet les requêtes vers `http://127.0.0.1:8085` (ou le port configuré). Utilise HTTPS avec Basic Auth, car les identifiants sont simplement encodés en base64.
+
+Le proxy doit conserver l'en-tête `Host` d'origine et remplacer les en-têtes `X-Forwarded-Proto` et `X-Forwarded-For` par le protocole et l'adresse du client. Cela permet notamment à la vérification d'origine et aux limites par IP de fonctionner derrière HTTPS.
+
+`TRUST_PROXY=0` reste adapté à un accès direct. Avec un proxy sur la même machine, utilise `TRUST_PROXY=loopback`. `TRUST_PROXY=1` convient si toutes les requêtes passent par exactement un proxy ; limite alors l'accès direct au port Spark au seul proxy. Adapte cette valeur à la topologie réelle pour que les clients ne puissent pas imposer leurs propres en-têtes transmis.
 
 ## Migration depuis l'ancienne version (CSV)
 
@@ -54,6 +65,8 @@ Si tu viens d'une ancienne installation NetArise avec `devices.csv` :
 npm install
 npm run migrate
 ```
+
+La commande `npm run migrate` exécute `scripts/migrate-csv-to-sqlite.js`. Elle nécessite une installation complète avec les dépendances de développement (`npm install`, ou `npm install --include=dev` si `NODE_ENV=production`), car `csv-parse` est une dépendance de développement. Une installation avec `npm install --omit=dev` ne suffit pas pour cette migration.
 
 Le script lit `devices.csv` et insère les appareils dans `data/spark.db`. Les doublons sont ignorés. Tu peux ensuite supprimer `devices.csv`.
 

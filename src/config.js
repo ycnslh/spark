@@ -2,6 +2,10 @@ const path = require('path');
 
 const rootDir = path.resolve(__dirname, '..');
 
+if (process.env.NODE_ENV === 'production' && process.env.AUTH_PASS === 'changeme') {
+  throw new Error('AUTH_PASS=changeme est interdit en production. Configurez un mot de passe sûr.');
+}
+
 module.exports = {
   rootDir,
   port: parseInt(process.env.PORT, 10) || 3000,
