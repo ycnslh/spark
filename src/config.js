@@ -1,6 +1,7 @@
 const path = require('path');
 
 const rootDir = path.resolve(__dirname, '..');
+const wolRepeatDelayMs = Number(process.env.WOL_REPEAT_DELAY_MS ?? 2000);
 
 if (process.env.NODE_ENV === 'production' && process.env.AUTH_PASS === 'changeme') {
   throw new Error('AUTH_PASS=changeme est interdit en production. Configurez un mot de passe sûr.');
@@ -18,6 +19,13 @@ module.exports = {
     pass: process.env.AUTH_PASS || null,
   },
   logLevel: process.env.LOG_LEVEL || 'info',
+  wol: {
+    broadcast: process.env.WOL_BROADCAST?.trim() || null,
+    allInterfaces: process.env.WOL_ALL_INTERFACES !== 'false',
+    repeatDelayMs:
+      Number.isInteger(wolRepeatDelayMs) && wolRepeatDelayMs >= 0 ? wolRepeatDelayMs : 2000,
+    port: parseInt(process.env.WOL_PORT, 10) || 9,
+  },
   trustProxy: process.env.TRUST_PROXY
     ? parseInt(process.env.TRUST_PROXY, 10) || process.env.TRUST_PROXY
     : 0,

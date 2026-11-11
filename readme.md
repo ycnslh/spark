@@ -38,16 +38,24 @@ Puis ouvre `http://<ip-de-ton-serveur>:8085` (port défini par `PORT` dans `.env
 
 Toutes les options sont dans [.env.example](.env.example) :
 
-| Variable          | Défaut | Rôle                                              |
-| ----------------- | ------ | ------------------------------------------------- |
-| `PORT`            | `8085` | Port d'écoute                                     |
-| `LOG_LEVEL`       | `info` | `debug` / `info` / `warn` / `error`               |
-| `AUTH_USER`       | (vide) | Utilisateur Basic Auth — si vide, auth désactivée |
-| `AUTH_PASS`       | (vide) | Mot de passe Basic Auth                           |
-| `TRUST_PROXY`     | `0`    | Proxies de confiance pour les en-têtes transmis   |
-| `WAKE_RATE_LIMIT` | `10`   | Nombre max de réveils par minute par IP           |
+| Variable              | Défaut | Rôle                                                              |
+| --------------------- | ------ | ----------------------------------------------------------------- |
+| `PORT`                | `8085` | Port d'écoute                                                     |
+| `LOG_LEVEL`           | `info` | `debug` / `info` / `warn` / `error`                               |
+| `AUTH_USER`           | (vide) | Utilisateur Basic Auth — si vide, auth désactivée                 |
+| `AUTH_PASS`           | (vide) | Mot de passe Basic Auth                                           |
+| `TRUST_PROXY`         | `0`    | Proxies de confiance pour les en-têtes transmis                   |
+| `WAKE_RATE_LIMIT`     | `10`   | Nombre max de réveils par minute par IP                           |
+| `WOL_BROADCAST`       | (vide) | Adresse cible unique, prioritaire sur la détection des interfaces |
+| `WOL_ALL_INTERFACES`  | `true` | Ajouter les broadcasts des interfaces IPv4 non internes           |
+| `WOL_REPEAT_DELAY_MS` | `2000` | Délai du second envoi en arrière-plan (ms), `0` le désactive      |
+| `WOL_PORT`            | `9`    | Port UDP des paquets WoL                                          |
 
 L'authentification est désactivée dès que `AUTH_USER` ou `AUTH_PASS` est vide ; Spark journalise alors un avertissement au démarrage. Configure les deux valeurs pour protéger l'accès. Avec `NODE_ENV=production`, le mot de passe `changeme` empêche le démarrage.
+
+Par défaut, Spark envoie le paquet magique aux broadcasts dirigés de chaque interface IPv4 non interne (calculés à partir de l'adresse et du masque), ainsi qu'à `255.255.255.255`, sans doublons. Avec `WOL_ALL_INTERFACES=false`, seul `255.255.255.255` est utilisé. Si `WOL_BROADCAST` est défini (par exemple `192.168.1.255`), cette adresse devient la seule cible, quelle que soit la valeur de `WOL_ALL_INTERFACES`. Ces réglages sont globaux pour tous les appareils.
+
+Le premier envoi réussit dès lors qu'au moins une cible accepte l'envoi UDP ; cela ne garantit pas que l'appareil s'est réveillé. Après ce premier envoi, Spark programme un second envoi après `WOL_REPEAT_DELAY_MS`, sans retarder la réponse HTTP ni la faire échouer. Ses résultats et les erreurs par cible sont journalisés au niveau `debug`. Utilise `WOL_REPEAT_DELAY_MS=0` pour désactiver cette répétition.
 
 ## Reverse proxy HTTPS
 
