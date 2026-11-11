@@ -55,6 +55,7 @@ function addColumnIfMissing(database, table, column, definition) {
 }
 
 function initSchema(database) {
+  database.pragma('foreign_keys = ON');
   database.transaction(() => {
     database.exec(SCHEMA);
     // Compat avec d'anciens volumes créés avant l'ajout de ces colonnes
@@ -72,6 +73,21 @@ function initSchema(database) {
         if (ip) update.run(ip, device.id);
       }
       database.pragma('user_version = 1');
+    }
+    if (database.pragma('user_version', { simple: true }) < 2) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS wake_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+          label TEXT,
+          token_hash TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          last_used_at TEXT,
+          revoked_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_wake_tokens_device ON wake_tokens(device_id);
+      `);
+      database.pragma('user_version = 2');
     }
   })();
 }

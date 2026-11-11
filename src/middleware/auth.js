@@ -43,7 +43,7 @@ function basicAuth(req, res, next) {
 
 function challenge(res) {
   res.set('WWW-Authenticate', 'Basic realm="Spark"');
-  res.status(401).send('Authentication required');
+  res.status(401).send('Authentification requise');
 }
 
-module.exports = { basicAuth };
+module.exports = { basicAuth, challenge };

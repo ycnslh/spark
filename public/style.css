@@ -578,3 +578,23 @@ tr:hover td {
   color: var(--tag-color);
   border: 1px solid color-mix(in srgb, var(--tag-color) 50%, transparent);
 }
+
+.token-panel {
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}
+.token-panel summary {
+  cursor: pointer;
+}
+.token-form {
+  margin-top: 1rem;
+}
+.token-secret code {
+  display: block;
+  user-select: all;
+  margin-bottom: 0.5rem;
+}
+.token-list .copy-button,
+.token-secret .copy-button {
+  margin: 0.25rem;
+}

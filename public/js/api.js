@@ -14,6 +14,14 @@ async function request(url, options = {}) {
 }
 
 export const api = {
+  listTokens: (id) => request(`/api/devices/${id}/tokens`),
+  createToken: (id, label) =>
+    request(`/api/devices/${id}/tokens`, {
+      method: 'POST',
+      body: JSON.stringify({ label }),
+    }),
+  revokeToken: (id, tokenId) =>
+    request(`/api/devices/${id}/tokens/${tokenId}`, { method: 'DELETE' }),
   listDevices: () => request('/api/devices'),
   createDevice: (payload) =>
     request('/api/devices', { method: 'POST', body: JSON.stringify(payload) }),

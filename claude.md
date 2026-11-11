@@ -50,6 +50,7 @@ spark/
 │   │   └── health.js               # /health (bypass auth)
 │   ├── services/
 │   │   ├── db.js                   # Connexion SQLite + schéma
+│   │   ├── tokenStore.js           # Secrets de réveil : génération, hash, révocation
 │   │   ├── deviceStore.js          # Repository pattern
 │   │   ├── wolSender.js            # Paquet magique + dgram
 │   │   └── pinger.js               # ICMP + TCP probe
@@ -75,10 +76,13 @@ spark/
   - `POST /api/devices` — Ajout (body : `{ name, mac, description?, host?, ip?, broadcast?, probe_port? }`)
   - `PATCH /api/devices/:id` — Modification du nom, de la description, du host et des champs réseau
   - `DELETE /api/devices/:mac`
+  - `POST /api/devices/:id/tokens` — `{label?}` (max 60 caractères), retourne `{id, token, url}` une seule fois
+  - `GET /api/devices/:id/tokens` — Métadonnées seulement, jamais de secret ni hash
+  - `DELETE /api/devices/:id/tokens/:tokenId` — Révocation propre à cet appareil
   - `GET /api/devices/:id/history`
   - `GET /api/status` — online/offline (IP explicite, host, puis IPv4 en description)
   - `POST /api/wake/:mac` — Réveil JSON
-  - `GET /wake/:nom` — Réveil HTML (raccourcis iOS)
+  - `GET /wake/:nom?token=…` — Réveil HTML sans Basic ni origine seulement avec un token actif du bon appareil (nom, MAC ou id)
   - `GET /health` — Healthcheck (bypass auth)
 
 ## Commandes utiles
@@ -125,3 +129,11 @@ Quand l'utilisateur pose des questions :
 - Le champ `ip` IPv4 est prioritaire pour le ping/probe, suivi du `host` existant puis de la première IPv4 valide en description. La migration SQLite version 1 ajoute `ip`, `broadcast`, `probe_port` et reprend une fois les IP des anciennes descriptions sans les modifier.
 - `probe_port` limite les sondes TCP à un port ; sinon 22/3389/445/80 sont sondés en parallèle après échec ICMP. Le `broadcast` de l'appareil remplace les cibles WoL globales.
 - Sauvegarder `data/spark.db` de façon cohérente avant mise à jour ; les tests de migration utilisent une base temporaire, pas une base de production.
+
+- La migration SQLite version 2 crée `wake_tokens` : `id`, `device_id` (FK `devices` avec `ON DELETE CASCADE`), `label`, `token_hash` (SHA-256 hex unique), `created_at`, `last_used_at`, `revoked_at`. `foreign_keys` reste activé ; le backfill des IP version 1 ne se répète pas.
+- `tokenStore.js` génère 32 octets via `crypto.randomBytes(32).toString('base64url')` ; seul le hash persiste. Les tokens ne font pas partie des exports JSON et sont supprimés avec l'appareil. Ne jamais journaliser un token ou une URL complète contenant une query string.
+- L'ordre des middlewares est important : `/health` public, limiteur d'échecs d'auth, reconnaissance du token sur le seul GET `/wake/:deviceId`, puis Basic Auth (sauf identité token validée). Un token ne donne accès à aucune autre route ; HEAD ne bénéficie pas du contournement. 401 identique pour token invalide, révoqué ou d'un autre appareil.
+- Le limiteur de réveil s'applique aux tokens ; `last_used_at` est mis à jour pour un réveil autorisé et l'historique contient `triggered_by=token:<label ou id>`, y compris si l'envoi UDP échoue.
+- L'exception User-Agent `Shortcuts` a été supprimée de `sameOrigin` : sans token, même les raccourcis doivent fournir une origine valide et Basic Auth si activée. Les écritures de gestion des tokens conservent les gardes existantes.
+- Le logger masque les query strings, y compris dans les erreurs, ainsi que les champs sensibles. Helmet conserve `Referrer-Policy: no-referrer` et la CSP existante. HTTPS est recommandé et les logs du reverse proxy sont à configurer séparément.
+- Le frontend conserve seulement en mémoire le secret nouvellement créé, le masque après fermeture du panneau et propose copie/liste/révocation par appareil. Les données utilisateur sont affichées via `textContent` ; ne pas ajouter de script inline. Le cache PWA version 2 distribue la nouvelle interface sans y stocker les réponses API ou de réveil.

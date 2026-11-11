@@ -1,5 +1,5 @@
 const { getDb } = require('./db');
-const { normalizeMac, formatMac } = require('../utils/mac');
+const { normalizeMac, formatMac, isValidMac } = require('../utils/mac');
 
 const SELECT_COLS = 'id, name, mac, host, description, ip, broadcast, probe_port, created_at';
 
@@ -15,11 +15,14 @@ function findByNameOrMac(identifier) {
   const db = getDb();
   const byName = db.prepare('SELECT * FROM devices WHERE name = ? COLLATE NOCASE').get(identifier);
   if (byName) return byName;
-  try {
-    return db.prepare('SELECT * FROM devices WHERE mac = ?').get(formatMac(identifier));
-  } catch {
-    return null;
+  if (isValidMac(identifier)) {
+    const byMac = db.prepare('SELECT * FROM devices WHERE mac = ?').get(formatMac(identifier));
+    if (byMac) return byMac;
   }
+  if (/^[1-9]\d*$/.test(String(identifier)) && Number.isSafeInteger(Number(identifier))) {
+    return findById(Number(identifier));
+  }
+  return null;
 }
 
 function findById(id) {

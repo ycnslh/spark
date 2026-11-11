@@ -9,7 +9,7 @@ Spark est une application web légère qui permet de réveiller des ordinateurs 
 - Envoi de paquets Wake-on-LAN (broadcast UDP port 9)
 - Statut online/offline en temps réel via ping ICMP / TCP probe (si une IP est configurée)
 - Historique des réveils par appareil avec confirmation post-ping
-- Liens directs (`/wake/<nom>`) pour raccourcis iPhone / Siri
+- Liens secrets par appareil (`/wake/<nom>?token=…`) pour raccourcis iPhone / Siri
 - Authentification Basic optionnelle, rate-limit, CSP via Helmet
 - Stockage SQLite, logs Docker avec rotation automatique
 
@@ -99,14 +99,21 @@ L'ordre de résolution est : IP explicite, host existant, puis première IPv4 va
 
 ### Raccourcis iPhone
 
-Récupère le lien direct dans la section _"Liens directs pour raccourcis"_ puis :
+Chaque token autorise uniquement le réveil de l'appareil auquel il appartient. Tu peux créer plusieurs tokens par appareil (par exemple un par téléphone), les nommer, consulter leur dernière utilisation et les révoquer séparément.
 
-1. App **Raccourcis** → "+"
-2. Ajouter une action **"Obtenir le contenu de l'URL"** → coller l'URL.
-3. Donner un nom au raccourci.
-4. Ajouter à l'écran d'accueil ou activer via Siri.
+1. Connecte-toi à Spark avec tes identifiants habituels et ouvre **Raccourcis iPhone — tokens** dans la fiche de l'appareil.
+2. Saisis éventuellement un libellé puis clique sur **Créer un token**.
+3. Copie immédiatement l'URL avec token dans **Liens directs pour raccourcis**. Le token et son URL ne sont affichés qu'à la création, jusqu'à la fermeture du panneau, au masquage ou au rechargement ; ils ne seront pas récupérables ensuite. Crée un nouveau token si tu les perds et révoque l'ancien.
+4. Dans l'app **Raccourcis** sur iPhone, crée un raccourci avec l'action **Obtenir le contenu de l'URL**, colle cette URL et conserve la méthode **GET**. Aucun en-tête Authorization n'est nécessaire.
+5. Donne un nom au raccourci et ajoute-le à l'écran d'accueil ou utilise Siri.
 
-Si tu as activé l'auth, ajoute les credentials dans le raccourci via _"Show More"_ → en-tête `Authorization: Basic <base64(user:pass)>`.
+Utilise **HTTPS** : le token est un secret transmis dans l'URL, et toute personne qui possède ce lien peut réveiller cet appareil. Ne partage pas ce lien publiquement. Spark masque les query strings dans ses logs applicatifs et envoie `Referrer-Policy: no-referrer`, mais les logs d'un reverse proxy peuvent contenir l'URL complète : configure leur masquage ou désactive la journalisation de ces URL. L'historique de navigation et le raccourci lui-même peuvent aussi conserver le lien.
+
+Pour couper un accès, clique sur **Révoquer** dans la fiche de l'appareil ; supprimer l'appareil supprime aussi ses tokens. La liste affiche seulement le libellé, les dates et l'état, jamais le secret. Un renommage conserve la validité des URL générées, qui utilisent la MAC.
+
+**Migration depuis l'ancienne méthode :** crée un token pour chaque appareil, remplace l'ancienne URL du raccourci par le lien secret et supprime son ancien en-tête Authorization. L'exception fondée sur le User-Agent `Shortcuts` a été retirée : sans token, `GET /wake/:nom` exige désormais une origine (`Origin` ou `Referer`) valide, ainsi que Basic Auth lorsque configurée. Les anciens raccourcis avec Basic Auth seul et sans origine doivent donc être mis à jour.
+
+La migration SQLite vers `user_version=2` crée automatiquement la table des tokens, sans relancer la reprise des IP du lot précédent. Les secrets sont générés aléatoirement (32 octets) et seuls leurs hash SHA-256 sont stockés.
 
 ## Logs
 
@@ -120,17 +127,20 @@ docker-compose logs spark 1>/dev/null     # seulement WARN/ERROR
 
 ## Endpoints API
 
-| Méthode | Route                      | Description                                                                               |
-| ------- | -------------------------- | ----------------------------------------------------------------------------------------- |
-| GET     | `/api/devices`             | Liste les appareils                                                                       |
-| POST    | `/api/devices`             | Ajoute un appareil — `{ name, mac, description?, host?, ip?, broadcast?, probe_port? }`   |
-| PATCH   | `/api/devices/:id`         | Modifie nom, description, host et champs réseau ; `null` efface un champ réseau optionnel |
-| DELETE  | `/api/devices/:mac`        | Supprime un appareil                                                                      |
-| GET     | `/api/devices/:id/history` | 20 derniers réveils                                                                       |
-| GET     | `/api/status`              | Statut online/offline via IP, host ou ancienne description                                |
-| POST    | `/api/wake/:mac`           | Réveille un appareil (réponse JSON)                                                       |
-| GET     | `/wake/:nom`               | Réveille un appareil (réponse HTML, idéal raccourcis)                                     |
-| GET     | `/health`                  | Healthcheck (bypass auth)                                                                 |
+| Méthode | Route                              | Description                                                                               |
+| ------- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| GET     | `/api/devices`                     | Liste les appareils                                                                       |
+| POST    | `/api/devices`                     | Ajoute un appareil — `{ name, mac, description?, host?, ip?, broadcast?, probe_port? }`   |
+| PATCH   | `/api/devices/:id`                 | Modifie nom, description, host et champs réseau ; `null` efface un champ réseau optionnel |
+| DELETE  | `/api/devices/:mac`                | Supprime un appareil                                                                      |
+| POST    | `/api/devices/:id/tokens`          | Crée `{label?}` et retourne `{id, token, url}` une seule fois                             |
+| GET     | `/api/devices/:id/tokens`          | Liste les métadonnées des tokens, sans secret                                             |
+| DELETE  | `/api/devices/:id/tokens/:tokenId` | Révoque un token de cet appareil                                                          |
+| GET     | `/api/devices/:id/history`         | 20 derniers réveils                                                                       |
+| GET     | `/api/status`                      | Statut online/offline via IP, host ou ancienne description                                |
+| POST    | `/api/wake/:mac`                   | Réveille un appareil (réponse JSON)                                                       |
+| GET     | `/wake/:nom`                       | Réveille un appareil ; token valide de cet appareil ou Basic + origine                    |
+| GET     | `/health`                          | Healthcheck (bypass auth)                                                                 |
 
 ## Architecture
 
@@ -150,6 +160,8 @@ spark/
 ├── Dockerfile                 # multi-stage, user non-root, tini
 └── docker-compose.yml
 ```
+
+Les routes de gestion des tokens suivent les mêmes protections Basic Auth et gardes d'écriture que les appareils (Basic désactivée seulement si les identifiants ne sont pas configurés). Un token ne donne accès à aucune autre API. Seul `GET /wake/:nom?token=…` contourne Basic et l'origine pour l'appareil correspondant (nom, MAC ou id) ; les tokens invalides, révoqués ou d'un autre appareil renvoient le même 401 et comptent dans le limiteur d'échecs d'authentification. Le limiteur de réveil reste actif.
 
 Stack : Node.js 22, Express 4, better-sqlite3, Helmet, express-rate-limit. Aucun framework côté frontend (vanilla JS modulaire + service worker).
 

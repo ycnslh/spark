@@ -92,9 +92,9 @@ test('GET /wake/:unknown returns 404 with escaped HTML', async () => {
   assert.doesNotMatch(res.text, /<img>/);
 });
 
-test('GET /wake/:id allows Apple Shortcuts user-agent without Origin', async () => {
+test('GET /wake/:id rejects Apple Shortcuts user-agent without Origin or token', async () => {
   const res = await request(app).get('/wake/<img>').set('User-Agent', 'Shortcuts/1234');
-  assert.equal(res.status, 404);
+  assert.equal(res.status, 403);
 });
 
 test('DELETE /api/devices/:mac removes the device', async () => {

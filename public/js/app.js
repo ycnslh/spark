@@ -22,6 +22,8 @@ const searchInput = document.getElementById('search-input');
 
 let currentDevices = [];
 let searchTerm = '';
+// Secrets éphémères : aucune persistance dans le stockage du navigateur.
+const newTokenLinks = new Map();
 
 async function refresh() {
   try {
@@ -94,6 +96,17 @@ function renderDevices(devices) {
       <button class="glass-button wake-button" data-action="wake">
         <i class="fas fa-power-off" aria-hidden="true"></i>
       </button>
+      <details class="token-panel">
+        <summary>Raccourcis iPhone — tokens</summary>
+        <form class="token-form form-group">
+          <label>Libellé (facultatif, 60 caractères maximum)
+            <input name="label" maxlength="60" placeholder="iPhone de la maison">
+          </label>
+          <button class="copy-button" type="submit">Créer un token</button>
+        </form>
+        <div class="token-secret" aria-live="polite"></div>
+        <div class="token-list" aria-live="polite"></div>
+      </details>
       <div class="history-panel" hidden></div>`;
 
     card.querySelector('.device-name span:last-child').textContent = device.name;
@@ -129,6 +142,21 @@ function renderDevices(devices) {
       .querySelector('.status-dot')
       .addEventListener('click', () => refreshDeviceStatus(device, card));
 
+    const tokenPanel = card.querySelector('.token-panel');
+    tokenPanel.addEventListener('toggle', () => {
+      if (tokenPanel.open) loadTokens(tokenPanel, device);
+      else {
+        newTokenLinks.delete(device.id);
+        tokenPanel.querySelector('.token-secret').replaceChildren();
+        renderDirectLinks(filteredDevices());
+      }
+    });
+    card.querySelector('.token-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      createDeviceToken(tokenPanel, device);
+    });
+    const fresh = newTokenLinks.get(device.id);
+    if (fresh) showCreatedToken(tokenPanel, device, fresh);
     devicesContainer.appendChild(card);
   }
 }
@@ -141,7 +169,7 @@ function renderDirectLinks(devices) {
   }
   directLinksContainer.innerHTML = '';
   for (const device of devices) {
-    const url = `${window.location.origin}/wake/${encodeURIComponent(device.name)}`;
+    const url = newTokenLinks.get(device.id)?.url;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td></td>
@@ -149,13 +177,15 @@ function renderDirectLinks(devices) {
       <td><button class="copy-button" aria-label="Copier le lien"><i class="fas fa-copy" aria-hidden="true"></i> Copier</button></td>`;
     tr.querySelector('td:first-child').textContent = device.name;
     const a = tr.querySelector('a');
-    a.href = url;
-    a.textContent = url;
+    if (url) a.href = url;
+    a.textContent = url || 'Créez un token dans la fiche de cet appareil.';
+    tr.querySelector('.copy-button').disabled = !url;
     tr.querySelector('.copy-button').addEventListener('click', async (e) => {
+      const button = e.currentTarget;
       try {
         await copyToClipboard(url);
         toast('Lien copié', 'success', 2000);
-        const icon = e.currentTarget.querySelector('i');
+        const icon = button.querySelector('i');
         const original = icon.className;
         icon.className = 'fas fa-check';
         setTimeout(() => {
@@ -166,6 +196,95 @@ function renderDirectLinks(devices) {
       }
     });
     directLinksContainer.appendChild(tr);
+  }
+}
+
+function showCreatedToken(panel, device, created) {
+  const secret = panel.querySelector('.token-secret');
+  secret.replaceChildren();
+  const warning = document.createElement('p');
+  warning.textContent =
+    'Copiez ce token maintenant : il ne sera plus affiché après fermeture ou rechargement. Cette URL donne accès au réveil de cet appareil. Utilisez HTTPS.';
+  const value = document.createElement('code');
+  value.textContent = created.token;
+  const copy = document.createElement('button');
+  copy.className = 'copy-button';
+  copy.textContent = 'Copier le token';
+  copy.addEventListener('click', async () => {
+    try {
+      await copyToClipboard(created.token);
+      toast('Token copié', 'success');
+    } catch {
+      toast('Erreur de copie', 'error');
+    }
+  });
+  const dismiss = document.createElement('button');
+  dismiss.className = 'copy-button';
+  dismiss.textContent = 'Masquer le token et le lien';
+  dismiss.addEventListener('click', () => {
+    newTokenLinks.delete(device.id);
+    secret.replaceChildren();
+    renderDirectLinks(filteredDevices());
+  });
+  secret.append(warning, value, copy, dismiss);
+}
+
+async function loadTokens(panel, device) {
+  const list = panel.querySelector('.token-list');
+  list.textContent = 'Chargement…';
+  try {
+    const tokens = await api.listTokens(device.id);
+    list.replaceChildren();
+    if (!tokens.length) list.textContent = 'Aucun token créé.';
+    for (const token of tokens) {
+      const row = document.createElement('p');
+      const description = document.createElement('span');
+      description.textContent = `${token.label || `Token ${token.id}`} — créé le ${formatDate(token.created_at)} — ${token.revoked_at ? 'révoqué' : 'actif'} — dernière utilisation : ${token.last_used_at ? formatDate(token.last_used_at) : 'jamais'} `;
+      row.appendChild(description);
+      if (!token.revoked_at) {
+        const revoke = document.createElement('button');
+        revoke.className = 'copy-button';
+        revoke.textContent = 'Révoquer';
+        revoke.addEventListener('click', async () => {
+          if (!(await confirmDialog(`Révoquer le token « ${token.label || token.id} » ?`))) return;
+          revoke.disabled = true;
+          try {
+            await api.revokeToken(device.id, token.id);
+            if (newTokenLinks.get(device.id)?.id === token.id) {
+              newTokenLinks.delete(device.id);
+              panel.querySelector('.token-secret').replaceChildren();
+              renderDirectLinks(filteredDevices());
+            }
+            await loadTokens(panel, device);
+          } catch (err) {
+            revoke.disabled = false;
+            toast(err.message || 'Erreur de révocation', 'error');
+          }
+        });
+        row.appendChild(revoke);
+      }
+      list.appendChild(row);
+    }
+  } catch (err) {
+    list.textContent = err.message || 'Erreur de chargement des tokens';
+  }
+}
+
+async function createDeviceToken(panel, device) {
+  const form = panel.querySelector('form');
+  const submit = form.querySelector('button');
+  submit.disabled = true;
+  try {
+    const created = await api.createToken(device.id, form.elements.label.value);
+    newTokenLinks.set(device.id, created);
+    showCreatedToken(panel, device, created);
+    form.reset();
+    renderDirectLinks(filteredDevices());
+    await loadTokens(panel, device);
+  } catch (err) {
+    toast(err.message || 'Erreur de création du token', 'error');
+  } finally {
+    submit.disabled = false;
   }
 }
 
@@ -205,6 +324,7 @@ async function deleteDevice(device) {
   if (!ok) return;
   try {
     await api.deleteDevice(device.mac);
+    newTokenLinks.delete(device.id);
     toast('Appareil supprimé', 'success');
     refresh();
   } catch (err) {

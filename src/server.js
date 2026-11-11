@@ -3,6 +3,7 @@ const helmet = require('helmet');
 
 const config = require('./config');
 const logger = require('./utils/logger');
+const { wakeTokenAuth } = require('./middleware/wakeTokenAuth');
 const { basicAuth } = require('./middleware/auth');
 const { authFailureLimiter, writeLimiter } = require('./middleware/rateLimit');
 const { sameOrigin } = require('./middleware/sameOrigin');
@@ -41,7 +42,10 @@ app.use((req, res, next) => {
 
 app.use('/health', healthRouter);
 
-app.use(authFailureLimiter, basicAuth);
+app.use(authFailureLimiter);
+// Seul ce GET peut accorder une identité de token avant Basic Auth.
+app.get('/wake/:deviceId', wakeTokenAuth);
+app.use((req, res, next) => (req.wakeToken ? next() : basicAuth(req, res, next)));
 
 const requireSameOrigin = sameOrigin();
 const requireWriteGuard = (req, res, next) => {
