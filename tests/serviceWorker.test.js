@@ -70,10 +70,13 @@ test('Express serves the generated worker behind auth and with the existing CSP'
     const res = await request(app).get('/sw.js').auth('sw-test', 'sw-test-password').expect(200);
     assert.equal(res.headers['cache-control'], 'no-cache');
     assert.doesNotMatch(res.text, /__SPARK_/);
-    assert.match(res.headers['content-security-policy'], /script-src 'self'/);
+    assert.match(res.headers['content-security-policy'], /script-src 'self'(;|$)/);
+    assert.match(res.headers['content-security-policy'], /style-src 'self'(;|$)/);
+    assert.match(res.headers['content-security-policy'], /font-src 'self'(;|$)/);
+    assert.doesNotMatch(res.headers['content-security-policy'], /cdnjs|unsafe-inline/);
     const offline = await request(app).get('/offline.html').auth('sw-test', 'sw-test-password');
     assert.equal(offline.status, 200);
-    assert.doesNotMatch(offline.text, /<script|\son\w+=|\sstyle=/i);
+    assert.doesNotMatch(offline.text, /<script(?![^>]*src=)|\son\w+=|\sstyle=/i);
   } finally {
     require('../src/services/db').closeDb();
     fs.rmSync(dir, { recursive: true, force: true });

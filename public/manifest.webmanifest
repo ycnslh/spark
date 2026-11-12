@@ -1,11 +1,11 @@
 {
   "name": "Spark",
   "short_name": "Spark",
-  "description": "Wake-on-LAN web interface",
+  "description": "Réveillez et gérez les appareils de votre réseau",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#121212",
-  "theme_color": "#121212",
+  "background_color": "#f5f7f8",
+  "theme_color": "#f5f7f8",
   "lang": "fr",
   "icons": [
     {

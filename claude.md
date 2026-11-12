@@ -164,3 +164,42 @@ Quand l'utilisateur pose des questions :
 - `src/routes/schedules.js` : GET `/api/schedules`, POST `/api/devices/:id/schedules`, PATCH/DELETE `/api/schedules/:id`, GET/PUT `/api/schedules/state`. Basic Auth et gardes d’écriture existantes ; validation stricte des champs, heure 00:00–23:59, jours entiers uniques 0–6 non vides, libellé ≤60 caractères Unicode, booléens stricts. Le PATCH ne peut changer ni appareil ni état d’exécution ; erreurs françaises.
 - UI dans les assets existants `index.html`, `js/app.js`, `js/api.js`, `style.css` : liste, formulaire, jours en cases, activation/suppression et pause clavier `role=switch` / `aria-checked`, messages `aria-live`, données utilisateur via `textContent`. La dernière tentative est affichée dans le fuseau navigateur. Rafraîchissement toutes les 30 s. Aucun script inline et aucune modification de CSP. Aucun nouvel asset : les JS/CSS modifiés sont déjà dans `PRECACHE_ASSETS`, donc le hash du lot 6 change automatiquement (test existant pour chaque asset).
 - Tests `scheduleMigration`, `schedules`, `scheduler`, `schedulerLifecycle` : bases uniquement temporaires, horloges et timers injectés, `wolSender` et ping simulés avant chargement du service partagé ; incluent migration/idempotence, CRUD/auth/origine/cascade/plafond, pause, déduplication après réouverture de base, fuseau/jour/minuit et changements d’heure Paris 2026, échecs isolés, historique/SSE et arrêt. Ne jamais tester un vrai paquet WoL sur le LAN. Node 22 obligatoire : `npx --yes --package=node@22 --call "npm test"`, idem lint/format:check.
+
+## Refonte de l’interface (novembre 2026)
+
+- Vanilla JS et endpoints inchangés. `style.css` centralise les couleurs et métriques ; accent
+  vert, surfaces clair/sombre, typographie système fluide. Grille adaptative, tableaux en cartes
+  sous 1024 px, ajout fixe sous 768 px, safe areas et réserves de défilement pour le focus.
+- `js/theme.js` est un script classique local bloquant avant le CSS : préférence système par
+  défaut, choix manuel `spark-theme` dans `localStorage` avec try/catch, changement système
+  suivi seulement sans choix explicite, meta theme-color synchronisée. Supprimer la clé pour
+  revenir au suivi système. `offline.html` et le shell des résultats `src/utils/html.js` le partagent.
+- Aucun Font Awesome/CDN. Sprite local `icons.svg` et helpers `icon`/`setIcon` ; noms de symboles
+  exclusivement constants. Le helper de focus doit sélectionner **a[href]**, jamais `[href]`
+  seul : les éléments SVG `<use href>` ne sont pas des cibles de focus clavier.
+- `ui.activateDialog` partage Tab/Maj+Tab, Échap, `inert`, blocage du défilement et restitution
+  du focus entre formulaire et confirmations. La réécriture des cartes préserve le bouton
+  actif après édition. Conserver les labels, descriptions d’erreur, états texte et régions
+  polies ; les données API passent par `textContent`, pas dans les templates HTML.
+- Recherche + filtre par tag, création/suppression et association des tags via les API
+  existantes. Puces neutres pour garantir le contraste ; couleur des tags préservée en base
+  et en export. Import JSON confirmé et bilan persistant, limite 512 Ko ; export natif par lien.
+  Aucune persistance des secrets de tokens. En cas d’échec d’affectation des tags après ajout,
+  le formulaire garde l’ID créé pour qu’un nouvel essai ne crée pas de doublon.
+- CSP resserrée : script-src, style-src, font-src self ; aucun style ou script inline ajouté.
+  `PRECACHE_ASSETS` ajoute `/icons.svg` et `/js/theme.js`. Le worker conserve ses stratégies
+  existantes : jamais de navigation authentifiée ou d’API en cache. Redémarrer après les edits.
+- `tests/interface.test.js` : langue/repères/lien d’évitement, assets et précache, labels et
+  descriptions réelles, cohérence du sprite, comportement du thème (avant DOM prêt, stockage
+  bloqué, persistance, changements système), calcul WCAG des contrastes dans les deux thèmes.
+  Minimum texte : clair 5,58:1, sombre 6,68:1 ; bordures et focus >=3:1. Les autres tests couvrent
+  le shell de résultat de réveil et la CSP effectivement servie.
+- Validation réelle avec Chromium headless et axe (installés seulement dans `/tmp`, pas dans
+  les dépendances du projet), navigateur Orca indisponible (`browser_unavailable`). Captures et
+  rapports non commités dans `/tmp/spark-interface-captures/`. Vérifier 320/375/768/1280/1440 px dans
+  les deux thèmes, le clavier, les dialogues et le véritable repli offline ; ne pas présenter
+  axe comme une certification WCAG. iPhone physique et lecteur d’écran réel restent à tester.
+- Serveur d’essai : port alloué par `app.listen(0, '127.0.0.1')`, DB `/tmp`, auth vide, broadcast
+  **127.0.0.1**, répétition et scheduler désactivés. `RATE_LIMIT_DISABLED=1` pour les tests UI
+  rapides isolés, sans changer la configuration du projet ; pas de véritable WoL sur le LAN.
+  Toutes les commandes npm passent par `npx --yes --package=node@22 --call "…"`.
