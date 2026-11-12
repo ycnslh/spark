@@ -34,3 +34,26 @@ test('application logs redact URL queries and sensitive fields in messages, meta
 function pathRoot() {
   return require('node:path').resolve(__dirname, '..');
 }
+
+test('development pretty transport preserves the redaction hook under Pino 10', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `const logger = require('./src/utils/logger');
+       logger.info('Wake /wake/pc?token=pretty-secret', { token: 'pretty-secret' });
+       logger.child({ nested: { authorization: 'pretty-secret' } }).warn('Child');`,
+    ],
+    {
+      cwd: pathRoot(),
+      encoding: 'utf8',
+      timeout: 10_000,
+      env: { ...process.env, NODE_ENV: 'development', LOG_LEVEL: 'info' },
+    }
+  );
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /REDACTED/);
+  assert.match(result.stdout, /Child/);
+  assert.equal(result.stdout.includes('pretty-secret'), false);
+});

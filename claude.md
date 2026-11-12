@@ -224,3 +224,15 @@ la politique des dotfiles, `trust proxy` explicite et le cycle de vie SSE sont c
 Les types MIME statiques suivent Express 5 ; les clients doivent accepter le type
 JavaScript standard. `tests/express5.test.js` couvre jokers, query ambiguë, body absent,
 montages de planifications, rejet async et 404 avec le vrai gestionnaire du serveur.
+
+## Migration Pino 10.4
+
+La [note de version Pino 10](https://github.com/pinojs/pino/releases/tag/v10.0.0)
+retire Node 18 ; Spark exige déjà Node 22+. Les options `level`, `base` et le
+transport de développement `pino-pretty` restent compatibles. La
+[signature officielle de `hooks.logMethod`](https://github.com/pinojs/pino/blob/v10.4.0/docs/api.md#logmethod)
+conserve `method.apply(this, args)` : le hook de `src/utils/logger.js` continue de
+masquer récursivement les query strings et champs sensibles avant sérialisation,
+y compris pour les erreurs et loggers enfants. Aucun changement du format JSON
+applicatif n'est nécessaire ; les tests de redaction et le transport de développement
+sont vérifiés pendant la migration.
