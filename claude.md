@@ -147,7 +147,7 @@ Quand l'utilisateur pose des questions :
 ## Maintenance et durcissement (lot 6)
 
 - Utiliser Node.js 22 pour toutes les commandes npm : si le Node système est différent, `npx --yes --package=node@22 --call "npm test"` (idem lint, format:check, audit). `better-sqlite3` est natif et doit correspondre à cette version.
-- ESLint 9 : `eslint.config.js` (flat CommonJS), `@eslint/js` recommended, mêmes règles explicites qu'avant, globals Node pour backend/scripts/tests, navigateur pour modules frontend, service worker pour `public/sw.js`. Ne plus recréer `.eslintrc.json` ni `.eslintignore` ; les exclusions sont intégrées. Le worker fait désormais partie du lint.
+- ESLint 10.14 : `eslint.config.js` (flat CommonJS), `@eslint/js` recommended, mêmes règles explicites qu'avant, globals Node pour backend/scripts/tests, navigateur pour modules frontend, service worker pour `public/sw.js`. Ne plus recréer `.eslintrc.json` ni `.eslintignore` ; les exclusions sont intégrées. Le worker fait désormais partie du lint.
 - Dependabot : `.github/dependabot.yml`, npm/github-actions/docker hebdomadaires, groupes minor/patch. La CI vérifie l'audit de production au seuil high ; lancer aussi l'audit complet pour les outils dev. Ne pas utiliser `npm audit fix --force` sans examiner les ruptures.
 - `src/routes/serviceWorker.js` expose une fabrique de handler appelée au chargement du serveur : lit `sw.js` et les seuls assets de `PRECACHE_ASSETS`, calcule SHA-256 tronqué à 16 caractères, remplace les marqueurs et sert un snapshot stable avec `Cache-Control: no-cache`. La route `/sw.js` précède `express.static`, après Basic Auth et sous Helmet. Ajouter chaque nouvel asset précaché dans cette liste et redémarrer après modification du contenu.
 - SW : précache `offline.html` et assets statiques seulement, jamais `/` ni `index.html`. Assets en stale-while-revalidate ; navigations réseau d'abord puis page hors ligne en cas d'échec réseau, sans persistance du HTML. Aucune interception de `/api/`, `/wake/`, `/health`, des écritures, des autres origines ou fichiers inconnus. Ne jamais stocker de réponse non-ok ou redirigée, ni d'asset avec query string. Purger uniquement les anciens caches `spark-*` à l'activation. Page hors ligne française sans script/style inline, CSS existant ; réveils et gestion restent dépendants du réseau.
@@ -254,3 +254,13 @@ accidentelle sans rupture supplémentaire d'API. La version 7.0.3 conserve l'exp
 CommonJS `csv-parse/sync` et corrige aussi le remplacement de prototype via les
 colonnes CSV (correctif 7.0.2). Les versions 6 puis 7 ont été validées séparément
 avec les mêmes tests de reprise ; aucune modification du script n'est nécessaire.
+
+## Versions des dépendances (12 novembre 2026)
+
+Planchers vérifiés avec `npm view <paquet> version` : better-sqlite3 13.1.1,
+Express 5.3.0, express-rate-limit 8.7.4, Helmet 8.3.0, Pino 10.4.0,
+@eslint/js 10.0.1, csv-parse 7.0.3, ESLint 10.14.0, globals 17.14.0,
+pino-pretty 13.2.0, Prettier 3.10.1 et Supertest 7.3.2.
+Les plages restent en `^` et `package-lock.json` verrouille l'installation.
+La CI conserve les dernières majeures disponibles `actions/checkout@v7` et
+`actions/setup-node@v7` (releases vérifiées : 7.0.1 et 7.1.0 respectivement).

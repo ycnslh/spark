@@ -201,13 +201,13 @@ npm install
 cp .env.example .env
 npm start                  # dev local
 npm test                   # tests (node --test, supertest)
-npm run lint               # ESLint 9, configuration flat
+npm run lint               # ESLint 10.14, configuration flat
 npm run format:check       # Prettier
 ```
 
 Utilise Node.js 22 pour le développement et les dépendances natives SQLite. Si le Node par défaut est différent, lance les commandes via `npx --yes --package=node@22 --call "npm test"` (idem pour `npm run lint`, `npm run format:check` et `npm audit`). Après un changement de version Node, réinstalle les dépendances natives avec cette version.
 
-ESLint 9 utilise `eslint.config.js` : règles recommandées et règles du projet, backend/scripts/tests en CommonJS Node, `public/js/` en modules navigateur et `public/sw.js` en environnement service worker. Les exclusions `node_modules`, `data` et `coverage` sont dans cette configuration. Voir le [guide de migration ESLint](https://eslint.org/docs/latest/use/configure/migration-guide).
+ESLint 10.14 utilise `eslint.config.js` : règles recommandées et règles du projet, backend/scripts/tests en CommonJS Node, `public/js/` en modules navigateur et `public/sw.js` en environnement service worker. Les exclusions `node_modules`, `data` et `coverage` sont dans cette configuration. Voir le [guide de migration ESLint](https://eslint.org/docs/latest/use/configure/migration-guide).
 
 ## Cache PWA et mode hors ligne
 
@@ -346,3 +346,13 @@ accidentelle sans rupture supplémentaire d'API. La version 7.0.3 conserve l'exp
 CommonJS `csv-parse/sync` et corrige aussi le remplacement de prototype via les
 colonnes CSV (correctif 7.0.2). Les versions 6 puis 7 ont été validées séparément
 avec les mêmes tests de reprise ; aucune modification du script n'est nécessaire.
+
+## Versions des dépendances (12 novembre 2026)
+
+Planchers vérifiés avec `npm view <paquet> version` : better-sqlite3 13.1.1,
+Express 5.3.0, express-rate-limit 8.7.4, Helmet 8.3.0, Pino 10.4.0,
+@eslint/js 10.0.1, csv-parse 7.0.3, ESLint 10.14.0, globals 17.14.0,
+pino-pretty 13.2.0, Prettier 3.10.1 et Supertest 7.3.2.
+Les plages restent en `^` et `package-lock.json` verrouille l'installation.
+La CI conserve les dernières majeures disponibles `actions/checkout@v7` et
+`actions/setup-node@v7` (releases vérifiées : 7.0.1 et 7.1.0 respectivement).
