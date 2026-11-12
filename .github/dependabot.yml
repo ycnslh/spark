@@ -1,23 +1,38 @@
 version: 2
 updates:
+  # Un seul passage par semaine, au plus 3 PR ouvertes par écosystème.
+  # Les montées de version majeure sont ignorées (elles peuvent casser Spark :
+  # elles se traitent à la main, comme la mise à jour de better-sqlite3 ou de Node).
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       npm-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       actions-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 3
     groups:
       docker-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']

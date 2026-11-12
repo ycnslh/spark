@@ -225,7 +225,7 @@ Le mode réseau host de Compose sert au broadcast WoL sur le réseau local. Les 
 
 ## Mises à jour
 
-Dependabot vérifie chaque semaine npm, les GitHub Actions et l'image Docker ; les mises à jour mineures/patch sont regroupées par écosystème. La CI exécute `npm audit --omit=dev --audit-level=high` en plus du lint, du formatage et des tests. Examiner les changements majeurs séparément et relancer `npm audit` complet pour les outils de développement.
+Dependabot vérifie chaque semaine npm, les GitHub Actions et l'image Docker ; les mises à jour mineures/patch sont regroupées par écosystème, avec au plus 3 PR ouvertes à la fois. Les montées de version majeure sont ignorées : elles se traitent à la main, car elles peuvent casser Spark (par exemple `better-sqlite3` ou Node). La CI exécute `npm audit --omit=dev --audit-level=high` en plus du lint, du formatage et des tests.
 
 Sauvegarde `data/spark.db` avant toute mise à jour, avec une sauvegarde SQLite cohérente (API de sauvegarde SQLite, ou application arrêtée). La migration automatique doit être validée sur une copie de ta base avant une mise à jour en production.
 
