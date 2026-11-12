@@ -264,3 +264,9 @@ pino-pretty 13.2.0, Prettier 3.10.1 et Supertest 7.3.2.
 Les plages restent en `^` et `package-lock.json` verrouille l'installation.
 La CI conserve les dernières majeures disponibles `actions/checkout@v7` et
 `actions/setup-node@v7` (releases vérifiées : 7.0.1 et 7.1.0 respectivement).
+
+La base Docker est `node:26.13.1-alpine3.24`, épinglée sur le digest réellement
+résolu par `docker pull` puis `docker image inspect` :
+`sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5`.
+Les deux stages utilisent cette même référence multiarchitecture ; le patch Node
+et la version Alpine sont explicites.

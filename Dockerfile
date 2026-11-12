@@ -1,4 +1,4 @@
-FROM node:26.13.0-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS deps
+FROM node:26.13.1-alpine3.24@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS deps
 WORKDIR /app
 RUN apk add --no-cache python3 make g++ \
  && npm config set update-notifier false
@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev \
  && apk del python3 make g++
 
-FROM node:26.13.0-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS runtime
+FROM node:26.13.1-alpine3.24@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS runtime
 RUN apk add --no-cache iputils tini \
  && addgroup -S app && adduser -S app -G app
 WORKDIR /app
