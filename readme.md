@@ -398,9 +398,8 @@ via ESLint **10.14.0** et @eslint/config-array **0.23.5**, avec propagation à
 La plage affectée est `>=7.0.0 <11.0.1` et aucune 10.x corrigée n'est publiée.
 `npm audit fix --force` propose de rétrograder ESLint en 9.39.5 ; conserver les dernières
 majeures demandées et attendre une correction compatible, sans imposer minimatch 11
-hors des plages supportées par ESLint. Voir le rapport détaillé
-[DEPENDENCY_UPGRADE_REPORT.md](DEPENDENCY_UPGRADE_REPORT.md) pour les versions,
-commits, preuves et commandes de reprise.
+hors des plages supportées par ESLint. Le détail des versions, commits et preuves figure dans la
+description de la PR de mise à jour et dans l’historique Git.
 
 ### Fermeture du logger de développement sous Node 26
 
