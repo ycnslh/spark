@@ -13,10 +13,10 @@
     "format:check": "prettier --check ."
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^13.1.1",
     "express": "^4.21.0",
     "express-rate-limit": "^8.7.4",
     "helmet": "^8.0.0",
