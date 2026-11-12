@@ -192,7 +192,7 @@ spark/
 
 Les routes de planification et de gestion des tokens suivent les mêmes protections Basic Auth et gardes d'écriture que les appareils (Basic désactivée seulement si les identifiants ne sont pas configurés). Un token ne donne accès à aucune autre API. Seul `GET /wake/:nom?token=…` contourne Basic et l'origine pour l'appareil correspondant (nom, MAC ou id) ; les tokens invalides, révoqués ou d'un autre appareil renvoient le même 401 et comptent dans le limiteur d'échecs d'authentification. Le limiteur de réveil reste actif.
 
-Stack : Node.js 22 ou plus récent (Node 26 dans l’image Docker), Express 4, better-sqlite3 13, Helmet, express-rate-limit 8. Aucun framework côté frontend (vanilla JS modulaire + service worker).
+Stack : Node.js 22 ou plus récent (Node 26 dans l’image Docker), Express 5.3, better-sqlite3 13, Helmet, express-rate-limit 8. Aucun framework côté frontend (vanilla JS modulaire + service worker).
 
 ## Développement
 
@@ -295,3 +295,24 @@ parallèles d’assets et les connexions SSE peuvent sinon rencontrer le limiteu
 Spark nécessite Node 22 ou plus récent (`better-sqlite3` 13 n'est plus compatible avec Node 20, arrivé en fin de vie). La CI teste Node 22, 24 et 26 ; l'image Docker utilise Node 26.
 
 `better-sqlite3` 13 est compilé à l'installation : en dehors de Docker (dont l'image embarque déjà les outils), `npm install` demande `python3`, `make` et un compilateur C++.
+
+## Migration Express 5.3 (novembre 2026)
+
+Le [guide officiel Express 5](https://expressjs.com/en/guide/migrating-5/)
+a été vérifié sur les routes et middlewares. Le routeur utilise path-to-regexp 8 :
+les futurs jokers doivent être nommés (`/*splat`, ou `/{*splat}` pour inclure `/`).
+Les routes actuelles utilisent des paramètres simples ; les deux chemins du tableau
+`app.use` des planifications conservent leur garde et leurs paramètres.
+
+`req.query` est désormais un getter avec parseur simple (objets sans prototype) :
+conserver `Object.hasOwn(req.query, 'token')`, sans réaffectation de query. Les tokens
+répétés ou structurés ne donnent aucun accès. Sans JSON parsé, `req.body` peut être
+`undefined` ; garder les validations existantes. Les rejets des handlers async
+arrivent maintenant au gestionnaire final 500 JSON, sans exposer le détail interne.
+Les routes inconnues conservent la réponse Express 404 HTML après authentification.
+
+Aucune méthode retirée n'est utilisée. L'ordre health/auth/token/gardes/SW/static/API,
+la politique des dotfiles, `trust proxy` explicite et le cycle de vie SSE sont conservés.
+Les types MIME statiques suivent Express 5 ; les clients doivent accepter le type
+JavaScript standard. `tests/express5.test.js` couvre jokers, query ambiguë, body absent,
+montages de planifications, rejet async et 404 avec le vrai gestionnaire du serveur.

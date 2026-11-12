@@ -15,7 +15,7 @@ Ce projet est à but d'apprentissage. L'utilisateur souhaite comprendre et maît
 | Technologie                     | Emplacement                                         | Rôle                                       |
 | ------------------------------- | --------------------------------------------------- | ------------------------------------------ |
 | **Node.js 22+**                 | `src/`                                              | Runtime JavaScript côté serveur (CommonJS) |
-| **Express 4**                   | `src/server.js`, `src/routes/`                      | Framework web et API REST                  |
+| **Express 5.3**                 | `src/server.js`, `src/routes/`                      | Framework web et API REST                  |
 | **better-sqlite3**              | `src/services/db.js`, `src/services/deviceStore.js` | Base SQLite synchrone                      |
 | **Helmet + express-rate-limit** | `src/middleware/`                                   | Sécurité (CSP, rate limiting)              |
 | **Vanilla JS modulaire**        | `public/js/`                                        | Frontend SPA (ES modules)                  |
@@ -203,3 +203,24 @@ Quand l'utilisateur pose des questions :
   **127.0.0.1**, répétition et scheduler désactivés. `RATE_LIMIT_DISABLED=1` pour les tests UI
   rapides isolés, sans changer la configuration du projet ; pas de véritable WoL sur le LAN.
   Toutes les commandes npm passent par `npx --yes --package=node@22 --call "…"`.
+
+## Migration Express 5.3 (novembre 2026)
+
+Le [guide officiel Express 5](https://expressjs.com/en/guide/migrating-5/)
+a été vérifié sur les routes et middlewares. Le routeur utilise path-to-regexp 8 :
+les futurs jokers doivent être nommés (`/*splat`, ou `/{*splat}` pour inclure `/`).
+Les routes actuelles utilisent des paramètres simples ; les deux chemins du tableau
+`app.use` des planifications conservent leur garde et leurs paramètres.
+
+`req.query` est désormais un getter avec parseur simple (objets sans prototype) :
+conserver `Object.hasOwn(req.query, 'token')`, sans réaffectation de query. Les tokens
+répétés ou structurés ne donnent aucun accès. Sans JSON parsé, `req.body` peut être
+`undefined` ; garder les validations existantes. Les rejets des handlers async
+arrivent maintenant au gestionnaire final 500 JSON, sans exposer le détail interne.
+Les routes inconnues conservent la réponse Express 404 HTML après authentification.
+
+Aucune méthode retirée n'est utilisée. L'ordre health/auth/token/gardes/SW/static/API,
+la politique des dotfiles, `trust proxy` explicite et le cycle de vie SSE sont conservés.
+Les types MIME statiques suivent Express 5 ; les clients doivent accepter le type
+JavaScript standard. `tests/express5.test.js` couvre jokers, query ambiguë, body absent,
+montages de planifications, rejet async et 404 avec le vrai gestionnaire du serveur.
