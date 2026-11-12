@@ -237,7 +237,7 @@ y compris pour les erreurs et loggers enfants. Aucun changement du format JSON
 applicatif n'est nécessaire ; les tests de redaction et le transport de développement
 sont vérifiés pendant la migration.
 
-## Migration csv-parse 6.2.1
+## Migration csv-parse 5 → 6.2.1 → 7.0.3
 
 Le [changelog officiel csv-parse](https://github.com/adaltas/node-csv/blob/master/packages/csv-parse/CHANGELOG.md)
 a été lu pour les changements de la version 6. Le script de reprise garde
@@ -248,3 +248,9 @@ Les tests `csvMigration` exécutent le vrai script sur des CSV temporaires
 vérifient SQLite et l'idempotence. `csv-parse` reste une dépendance de développement :
 installer les dépendances dev pour `npm run migrate`, avant la construction de l'image
 production qui utilise `npm ci --omit=dev`.
+
+La version 7.0.0 est décrite par les mainteneurs comme une publication majeure
+accidentelle sans rupture supplémentaire d'API. La version 7.0.3 conserve l'export
+CommonJS `csv-parse/sync` et corrige aussi le remplacement de prototype via les
+colonnes CSV (correctif 7.0.2). Les versions 6 puis 7 ont été validées séparément
+avec les mêmes tests de reprise ; aucune modification du script n'est nécessaire.
