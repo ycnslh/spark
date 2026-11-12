@@ -15,7 +15,7 @@ Ce projet est à but d'apprentissage. L'utilisateur souhaite comprendre et maît
 | Technologie                     | Emplacement                                         | Rôle                                       |
 | ------------------------------- | --------------------------------------------------- | ------------------------------------------ |
 | **Node.js 22+**                 | `src/`                                              | Runtime JavaScript côté serveur (CommonJS) |
-| **Express 4**                   | `src/server.js`, `src/routes/`                      | Framework web et API REST                  |
+| **Express 5.3**                 | `src/server.js`, `src/routes/`                      | Framework web et API REST                  |
 | **better-sqlite3**              | `src/services/db.js`, `src/services/deviceStore.js` | Base SQLite synchrone                      |
 | **Helmet + express-rate-limit** | `src/middleware/`                                   | Sécurité (CSP, rate limiting)              |
 | **Vanilla JS modulaire**        | `public/js/`                                        | Frontend SPA (ES modules)                  |
@@ -146,9 +146,9 @@ Quand l'utilisateur pose des questions :
 
 ## Maintenance et durcissement (lot 6)
 
-- Utiliser Node.js 22 pour toutes les commandes npm : si le Node système est différent, `npx --yes --package=node@22 --call "npm test"` (idem lint, format:check, audit). `better-sqlite3` est natif et doit correspondre à cette version.
-- ESLint 9 : `eslint.config.js` (flat CommonJS), `@eslint/js` recommended, mêmes règles explicites qu'avant, globals Node pour backend/scripts/tests, navigateur pour modules frontend, service worker pour `public/sw.js`. Ne plus recréer `.eslintrc.json` ni `.eslintignore` ; les exclusions sont intégrées. Le worker fait désormais partie du lint.
-- Dependabot : `.github/dependabot.yml`, npm/github-actions/docker hebdomadaires, groupes minor/patch. La CI vérifie l'audit de production au seuil high ; lancer aussi l'audit complet pour les outils dev. Ne pas utiliser `npm audit fix --force` sans examiner les ruptures.
+- Utiliser une version prise en charge (Node.js 22, 24 ou 26) avec les outils de compilation natifs. Pour sélectionner Node 22 comme référence, `npx --yes --package=node@22 --call "npm test"` (idem lint, format:check, audit). `better-sqlite3` est natif et doit correspondre à cette version.
+- ESLint 10.14 : `eslint.config.js` (flat CommonJS), `@eslint/js` recommended, mêmes règles explicites qu'avant, globals Node pour backend/scripts/tests, navigateur pour modules frontend, service worker pour `public/sw.js`. Ne plus recréer `.eslintrc.json` ni `.eslintignore` ; les exclusions sont intégrées. Le worker fait désormais partie du lint.
+- Dependabot : `.github/dependabot.yml`, npm/github-actions/docker hebdomadaires, groupes minor/patch, 3 PR maximum par écosystème, montées majeures ignorées (à traiter à la main). La CI vérifie l'audit de production au seuil high ; lancer aussi l'audit complet pour les outils dev. Ne pas utiliser `npm audit fix --force` sans examiner les ruptures.
 - `src/routes/serviceWorker.js` expose une fabrique de handler appelée au chargement du serveur : lit `sw.js` et les seuls assets de `PRECACHE_ASSETS`, calcule SHA-256 tronqué à 16 caractères, remplace les marqueurs et sert un snapshot stable avec `Cache-Control: no-cache`. La route `/sw.js` précède `express.static`, après Basic Auth et sous Helmet. Ajouter chaque nouvel asset précaché dans cette liste et redémarrer après modification du contenu.
 - SW : précache `offline.html` et assets statiques seulement, jamais `/` ni `index.html`. Assets en stale-while-revalidate ; navigations réseau d'abord puis page hors ligne en cas d'échec réseau, sans persistance du HTML. Aucune interception de `/api/`, `/wake/`, `/health`, des écritures, des autres origines ou fichiers inconnus. Ne jamais stocker de réponse non-ok ou redirigée, ni d'asset avec query string. Purger uniquement les anciens caches `spark-*` à l'activation. Page hors ligne française sans script/style inline, CSS existant ; réveils et gestion restent dépendants du réseau.
 - Tests `tests/serviceWorker.test.js` : route réelle (auth, CSP, no-cache), version stable, invalidation pour chaque asset au redémarrage, précache, activation et stratégies via une VM Node et un adaptateur CacheStorage. Ce contrôle ne remplace pas un essai d'installation PWA sur téléphone.
@@ -163,7 +163,7 @@ Quand l'utilisateur pose des questions :
 - `performWake` est extrait sans changement de comportement dans `src/services/wakeService.js` et partagé avec les routes existantes. Le scheduler renseigne `triggered_by=schedule:<id>`, conserve le broadcast et la sonde par appareil, l’historique d’échec et les événements SSE `wake`. `last_status` vaut `running`, `sent` ou `failed` (résultat d’envoi, pas confirmation ping).
 - `src/routes/schedules.js` : GET `/api/schedules`, POST `/api/devices/:id/schedules`, PATCH/DELETE `/api/schedules/:id`, GET/PUT `/api/schedules/state`. Basic Auth et gardes d’écriture existantes ; validation stricte des champs, heure 00:00–23:59, jours entiers uniques 0–6 non vides, libellé ≤60 caractères Unicode, booléens stricts. Le PATCH ne peut changer ni appareil ni état d’exécution ; erreurs françaises.
 - UI dans les assets existants `index.html`, `js/app.js`, `js/api.js`, `style.css` : liste, formulaire, jours en cases, activation/suppression et pause clavier `role=switch` / `aria-checked`, messages `aria-live`, données utilisateur via `textContent`. La dernière tentative est affichée dans le fuseau navigateur. Rafraîchissement toutes les 30 s. Aucun script inline et aucune modification de CSP. Aucun nouvel asset : les JS/CSS modifiés sont déjà dans `PRECACHE_ASSETS`, donc le hash du lot 6 change automatiquement (test existant pour chaque asset).
-- Tests `scheduleMigration`, `schedules`, `scheduler`, `schedulerLifecycle` : bases uniquement temporaires, horloges et timers injectés, `wolSender` et ping simulés avant chargement du service partagé ; incluent migration/idempotence, CRUD/auth/origine/cascade/plafond, pause, déduplication après réouverture de base, fuseau/jour/minuit et changements d’heure Paris 2026, échecs isolés, historique/SSE et arrêt. Ne jamais tester un vrai paquet WoL sur le LAN. Node 22 obligatoire : `npx --yes --package=node@22 --call "npm test"`, idem lint/format:check.
+- Tests `scheduleMigration`, `schedules`, `scheduler`, `schedulerLifecycle` : bases uniquement temporaires, horloges et timers injectés, `wolSender` et ping simulés avant chargement du service partagé ; incluent migration/idempotence, CRUD/auth/origine/cascade/plafond, pause, déduplication après réouverture de base, fuseau/jour/minuit et changements d’heure Paris 2026, échecs isolés, historique/SSE et arrêt. Ne jamais tester un vrai paquet WoL sur le LAN. Vérifier Node 22, 24 et 26 ; commande de référence Node 22 : `npx --yes --package=node@22 --call "npm test"`, idem lint/format:check.
 
 ## Refonte de l’interface (novembre 2026)
 
@@ -203,3 +203,121 @@ Quand l'utilisateur pose des questions :
   **127.0.0.1**, répétition et scheduler désactivés. `RATE_LIMIT_DISABLED=1` pour les tests UI
   rapides isolés, sans changer la configuration du projet ; pas de véritable WoL sur le LAN.
   Toutes les commandes npm passent par `npx --yes --package=node@22 --call "…"`.
+
+## Migration Express 5.3 (novembre 2026)
+
+Le [guide officiel Express 5](https://expressjs.com/en/guide/migrating-5/)
+a été vérifié sur les routes et middlewares. Le routeur utilise path-to-regexp 8 :
+les futurs jokers doivent être nommés (`/*splat`, ou `/{*splat}` pour inclure `/`).
+Les routes actuelles utilisent des paramètres simples ; les deux chemins du tableau
+`app.use` des planifications conservent leur garde et leurs paramètres.
+
+`req.query` est désormais un getter avec parseur simple (objets sans prototype) :
+conserver `Object.hasOwn(req.query, 'token')`, sans réaffectation de query. Les tokens
+répétés ou structurés ne donnent aucun accès. Sans JSON parsé, `req.body` peut être
+`undefined` ; garder les validations existantes. Les rejets des handlers async
+arrivent maintenant au gestionnaire final 500 JSON, sans exposer le détail interne.
+Les routes inconnues conservent la réponse Express 404 HTML après authentification.
+
+Aucune méthode retirée n'est utilisée. L'ordre health/auth/token/gardes/SW/static/API,
+la politique des dotfiles, `trust proxy` explicite et le cycle de vie SSE sont conservés.
+Les types MIME statiques suivent Express 5 ; les clients doivent accepter le type
+JavaScript standard. `tests/express5.test.js` couvre jokers, query ambiguë, body absent,
+montages de planifications, rejet async et 404 avec le vrai gestionnaire du serveur.
+
+## Migration Pino 10.4
+
+La [note de version Pino 10](https://github.com/pinojs/pino/releases/tag/v10.0.0)
+retire Node 18 ; Spark exige déjà Node 22+. Les options `level`, `base` et le
+transport de développement `pino-pretty` restent compatibles. La
+[signature officielle de `hooks.logMethod`](https://github.com/pinojs/pino/blob/v10.4.0/docs/api.md#logmethod)
+conserve `method.apply(this, args)` : le hook de `src/utils/logger.js` continue de
+masquer récursivement les query strings et champs sensibles avant sérialisation,
+y compris pour les erreurs et loggers enfants. Aucun changement du format JSON
+applicatif n'est nécessaire ; les tests de redaction et le transport de développement
+sont vérifiés pendant la migration.
+
+## Migration csv-parse 5 → 6.2.1 → 7.0.3
+
+Le [changelog officiel csv-parse](https://github.com/adaltas/node-csv/blob/master/packages/csv-parse/CHANGELOG.md)
+a été lu pour les changements de la version 6. Le script de reprise garde
+`const { parse } = require('csv-parse/sync')` et ses options `columns`,
+`skip_empty_lines`, `trim` : aucune option ni aucun code d'erreur retiré n'y figure.
+Les tests `csvMigration` exécutent le vrai script sur des CSV temporaires
+(champs entre guillemets, CRLF, doublons, MAC invalides et fichier malformé), puis
+vérifient SQLite et l'idempotence. `csv-parse` reste une dépendance de développement :
+installer les dépendances dev pour `npm run migrate`, avant la construction de l'image
+production qui utilise `npm ci --omit=dev`.
+
+La version 7.0.0 est décrite par les mainteneurs comme une publication majeure
+accidentelle sans rupture supplémentaire d'API. La version 7.0.3 conserve l'export
+CommonJS `csv-parse/sync` et corrige aussi le remplacement de prototype via les
+colonnes CSV (correctif 7.0.2). Les versions 6 puis 7 ont été validées séparément
+avec les mêmes tests de reprise ; aucune modification du script n'est nécessaire.
+
+## Versions des dépendances (12 novembre 2026)
+
+Planchers vérifiés avec `npm view <paquet> version` : better-sqlite3 13.1.1,
+Express 5.3.0, express-rate-limit 8.7.4, Helmet 8.3.0, Pino 10.4.0,
+@eslint/js 10.0.1, csv-parse 7.0.3, ESLint 10.14.0, globals 17.14.0,
+pino-pretty 13.2.0, Prettier 3.10.1 et Supertest 7.3.2.
+Les plages restent en `^` et `package-lock.json` verrouille l'installation.
+La CI conserve les dernières majeures disponibles `actions/checkout@v7` et
+`actions/setup-node@v7` (releases vérifiées : 7.0.1 et 7.1.0 respectivement).
+
+La base Docker est `node:26.13.1-alpine3.24`, épinglée sur le digest réellement
+résolu par `docker pull` puis `docker image inspect` :
+`sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5`.
+Les deux stages utilisent cette même référence multiarchitecture ; le patch Node
+et la version Alpine sont explicites.
+
+## Vérification isolée des mises à jour
+
+Les contrôles du 12 novembre 2026 passent sous Node **22.23.5**, **24.22.3** et
+**26.13.1** : lint, format et **168 tests réussis** pour chaque version. Sur cet hôte
+sans compilateur, utiliser les conteneurs plutôt que `npm ci` sur l'hôte :
+
+```bash
+sh scripts/verify-in-docker.sh node:22-alpine
+sh scripts/verify-in-docker.sh node:24-alpine
+sh scripts/verify-in-docker.sh node:26.13.1-alpine3.24
+sh scripts/verify-image-in-docker.sh
+```
+
+Le premier script copie le worktree monté en lecture seule, exclut `.env*` et `data/`,
+installe python3/make/g++ puis exécute `npm ci`, lint, format et tests. Sous Node 26,
+il lance aussi `scripts/smoke-server.js` : vrai serveur sur port éphémère, SQLite
+jetable, `NODE_ENV=production`, `RATE_LIMIT_DISABLED` absent, UDP uniquement vers
+127.0.0.1. Il exerce statique, CRUD, tags, import/export, tokens, wake, planifications,
+statut, SSE, 404 et erreur JSON ; les trois limiteurs doivent répondre 429 au seuil.
+Le JSON malformé conserve le 500 historique du gestionnaire global ; les erreurs
+async sont désormais transmises à ce même gestionnaire par Express 5.
+
+Le second script construit une image `spark-deps-test-*` unique, puis vérifie health
+et l'écriture/relecture SQLite avec le durcissement Compose (read-only, tmpfs /tmp,
+cap-drop ALL + NET_RAW, no-new-privileges), en bridge et sur port publié éphémère.
+Ses conteneurs et son image sont supprimés à la sortie. Aucun test ne valide le WoL
+sur le LAN, l'affichage iPhone ou l'exécution distante des GitHub Actions.
+
+`npm outdated` est vide. `npm audit --omit=dev` ne trouve aucune vulnérabilité.
+L'audit complet reste en échec (4 alertes modérées, toutes dev) : minimatch **10.2.6**,
+via ESLint **10.14.0** et @eslint/config-array **0.23.5**, avec propagation à
+@eslint/js **10.0.1** — [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+La plage affectée est `>=7.0.0 <11.0.1` et aucune 10.x corrigée n'est publiée.
+`npm audit fix --force` propose de rétrograder ESLint en 9.39.5 ; conserver les dernières
+majeures demandées et attendre une correction compatible, sans imposer minimatch 11
+hors des plages supportées par ESLint. Le détail des versions, commits et preuves figure dans la
+description de la PR de mise à jour et dans l’historique Git.
+
+### Fermeture du logger de développement sous Node 26
+
+Un contrôle répété a révélé un `SIGSEGV` intermittent à la sortie de tests SQLite
+avec le transport pretty en worker ; il a été reproduit aussi avec Pino 9 et disparaît
+en production sans worker. Le logger de développement utilise désormais le
+[flux direct officiel pino-pretty](https://github.com/pinojs/pino-pretty#usage-as-a-stream)
+avec `sync: true`, qui termine ses écritures avant la sortie. Le format pretty,
+les niveaux et la redaction sont conservés ; les écritures dev sont synchrones.
+La production conserve ses logs JSON sans dépendre de pino-pretty. Un test ouvre,
+utilise et ferme SQLite dans dix processus courts de développement, puis vérifie
+la sortie et le masquage des secrets. Le scénario deviceStore a aussi passé
+30 répétitions après correction, sans modifier ses assertions ni désactiver les logs.

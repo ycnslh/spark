@@ -192,7 +192,7 @@ spark/
 
 Les routes de planification et de gestion des tokens suivent les mêmes protections Basic Auth et gardes d'écriture que les appareils (Basic désactivée seulement si les identifiants ne sont pas configurés). Un token ne donne accès à aucune autre API. Seul `GET /wake/:nom?token=…` contourne Basic et l'origine pour l'appareil correspondant (nom, MAC ou id) ; les tokens invalides, révoqués ou d'un autre appareil renvoient le même 401 et comptent dans le limiteur d'échecs d'authentification. Le limiteur de réveil reste actif.
 
-Stack : Node.js 22 ou plus récent (Node 26 dans l’image Docker), Express 4, better-sqlite3 13, Helmet, express-rate-limit 8. Aucun framework côté frontend (vanilla JS modulaire + service worker).
+Stack : Node.js 22 ou plus récent (Node 26 dans l’image Docker), Express 5.3, better-sqlite3 13, Helmet, express-rate-limit 8. Aucun framework côté frontend (vanilla JS modulaire + service worker).
 
 ## Développement
 
@@ -201,13 +201,13 @@ npm install
 cp .env.example .env
 npm start                  # dev local
 npm test                   # tests (node --test, supertest)
-npm run lint               # ESLint 9, configuration flat
+npm run lint               # ESLint 10.14, configuration flat
 npm run format:check       # Prettier
 ```
 
 Utilise Node.js 22 pour le développement et les dépendances natives SQLite. Si le Node par défaut est différent, lance les commandes via `npx --yes --package=node@22 --call "npm test"` (idem pour `npm run lint`, `npm run format:check` et `npm audit`). Après un changement de version Node, réinstalle les dépendances natives avec cette version.
 
-ESLint 9 utilise `eslint.config.js` : règles recommandées et règles du projet, backend/scripts/tests en CommonJS Node, `public/js/` en modules navigateur et `public/sw.js` en environnement service worker. Les exclusions `node_modules`, `data` et `coverage` sont dans cette configuration. Voir le [guide de migration ESLint](https://eslint.org/docs/latest/use/configure/migration-guide).
+ESLint 10.14 utilise `eslint.config.js` : règles recommandées et règles du projet, backend/scripts/tests en CommonJS Node, `public/js/` en modules navigateur et `public/sw.js` en environnement service worker. Les exclusions `node_modules`, `data` et `coverage` sont dans cette configuration. Voir le [guide de migration ESLint](https://eslint.org/docs/latest/use/configure/migration-guide).
 
 ## Cache PWA et mode hors ligne
 
@@ -225,7 +225,7 @@ Le mode réseau host de Compose sert au broadcast WoL sur le réseau local. Les 
 
 ## Mises à jour
 
-Dependabot vérifie chaque semaine npm, les GitHub Actions et l'image Docker ; les mises à jour mineures/patch sont regroupées par écosystème. La CI exécute `npm audit --omit=dev --audit-level=high` en plus du lint, du formatage et des tests. Examiner les changements majeurs séparément et relancer `npm audit` complet pour les outils de développement.
+Dependabot vérifie chaque semaine npm, les GitHub Actions et l'image Docker ; les mises à jour mineures/patch sont regroupées par écosystème, avec au plus 3 PR ouvertes à la fois. Les montées de version majeure sont ignorées : elles se traitent à la main, car elles peuvent casser Spark (par exemple `better-sqlite3` ou Node). La CI exécute `npm audit --omit=dev --audit-level=high` en plus du lint, du formatage et des tests.
 
 Sauvegarde `data/spark.db` avant toute mise à jour, avec une sauvegarde SQLite cohérente (API de sauvegarde SQLite, ou application arrêtée). La migration automatique doit être validée sur une copie de ta base avant une mise à jour en production.
 
@@ -295,3 +295,121 @@ parallèles d’assets et les connexions SSE peuvent sinon rencontrer le limiteu
 Spark nécessite Node 22 ou plus récent (`better-sqlite3` 13 n'est plus compatible avec Node 20, arrivé en fin de vie). La CI teste Node 22, 24 et 26 ; l'image Docker utilise Node 26.
 
 `better-sqlite3` 13 est compilé à l'installation : en dehors de Docker (dont l'image embarque déjà les outils), `npm install` demande `python3`, `make` et un compilateur C++.
+
+## Migration Express 5.3 (novembre 2026)
+
+Le [guide officiel Express 5](https://expressjs.com/en/guide/migrating-5/)
+a été vérifié sur les routes et middlewares. Le routeur utilise path-to-regexp 8 :
+les futurs jokers doivent être nommés (`/*splat`, ou `/{*splat}` pour inclure `/`).
+Les routes actuelles utilisent des paramètres simples ; les deux chemins du tableau
+`app.use` des planifications conservent leur garde et leurs paramètres.
+
+`req.query` est désormais un getter avec parseur simple (objets sans prototype) :
+conserver `Object.hasOwn(req.query, 'token')`, sans réaffectation de query. Les tokens
+répétés ou structurés ne donnent aucun accès. Sans JSON parsé, `req.body` peut être
+`undefined` ; garder les validations existantes. Les rejets des handlers async
+arrivent maintenant au gestionnaire final 500 JSON, sans exposer le détail interne.
+Les routes inconnues conservent la réponse Express 404 HTML après authentification.
+
+Aucune méthode retirée n'est utilisée. L'ordre health/auth/token/gardes/SW/static/API,
+la politique des dotfiles, `trust proxy` explicite et le cycle de vie SSE sont conservés.
+Les types MIME statiques suivent Express 5 ; les clients doivent accepter le type
+JavaScript standard. `tests/express5.test.js` couvre jokers, query ambiguë, body absent,
+montages de planifications, rejet async et 404 avec le vrai gestionnaire du serveur.
+
+## Migration Pino 10.4
+
+La [note de version Pino 10](https://github.com/pinojs/pino/releases/tag/v10.0.0)
+retire Node 18 ; Spark exige déjà Node 22+. Les options `level`, `base` et le
+transport de développement `pino-pretty` restent compatibles. La
+[signature officielle de `hooks.logMethod`](https://github.com/pinojs/pino/blob/v10.4.0/docs/api.md#logmethod)
+conserve `method.apply(this, args)` : le hook de `src/utils/logger.js` continue de
+masquer récursivement les query strings et champs sensibles avant sérialisation,
+y compris pour les erreurs et loggers enfants. Aucun changement du format JSON
+applicatif n'est nécessaire ; les tests de redaction et le transport de développement
+sont vérifiés pendant la migration.
+
+## Migration csv-parse 5 → 6.2.1 → 7.0.3
+
+Le [changelog officiel csv-parse](https://github.com/adaltas/node-csv/blob/master/packages/csv-parse/CHANGELOG.md)
+a été lu pour les changements de la version 6. Le script de reprise garde
+`const { parse } = require('csv-parse/sync')` et ses options `columns`,
+`skip_empty_lines`, `trim` : aucune option ni aucun code d'erreur retiré n'y figure.
+Les tests `csvMigration` exécutent le vrai script sur des CSV temporaires
+(champs entre guillemets, CRLF, doublons, MAC invalides et fichier malformé), puis
+vérifient SQLite et l'idempotence. `csv-parse` reste une dépendance de développement :
+installer les dépendances dev pour `npm run migrate`, avant la construction de l'image
+production qui utilise `npm ci --omit=dev`.
+
+La version 7.0.0 est décrite par les mainteneurs comme une publication majeure
+accidentelle sans rupture supplémentaire d'API. La version 7.0.3 conserve l'export
+CommonJS `csv-parse/sync` et corrige aussi le remplacement de prototype via les
+colonnes CSV (correctif 7.0.2). Les versions 6 puis 7 ont été validées séparément
+avec les mêmes tests de reprise ; aucune modification du script n'est nécessaire.
+
+## Versions des dépendances (12 novembre 2026)
+
+Planchers vérifiés avec `npm view <paquet> version` : better-sqlite3 13.1.1,
+Express 5.3.0, express-rate-limit 8.7.4, Helmet 8.3.0, Pino 10.4.0,
+@eslint/js 10.0.1, csv-parse 7.0.3, ESLint 10.14.0, globals 17.14.0,
+pino-pretty 13.2.0, Prettier 3.10.1 et Supertest 7.3.2.
+Les plages restent en `^` et `package-lock.json` verrouille l'installation.
+La CI conserve les dernières majeures disponibles `actions/checkout@v7` et
+`actions/setup-node@v7` (releases vérifiées : 7.0.1 et 7.1.0 respectivement).
+
+La base Docker est `node:26.13.1-alpine3.24`, épinglée sur le digest réellement
+résolu par `docker pull` puis `docker image inspect` :
+`sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5`.
+Les deux stages utilisent cette même référence multiarchitecture ; le patch Node
+et la version Alpine sont explicites.
+
+## Vérification isolée des mises à jour
+
+Les contrôles du 12 novembre 2026 passent sous Node **22.23.5**, **24.22.3** et
+**26.13.1** : lint, format et **168 tests réussis** pour chaque version. Sur cet hôte
+sans compilateur, utiliser les conteneurs plutôt que `npm ci` sur l'hôte :
+
+```bash
+sh scripts/verify-in-docker.sh node:22-alpine
+sh scripts/verify-in-docker.sh node:24-alpine
+sh scripts/verify-in-docker.sh node:26.13.1-alpine3.24
+sh scripts/verify-image-in-docker.sh
+```
+
+Le premier script copie le worktree monté en lecture seule, exclut `.env*` et `data/`,
+installe python3/make/g++ puis exécute `npm ci`, lint, format et tests. Sous Node 26,
+il lance aussi `scripts/smoke-server.js` : vrai serveur sur port éphémère, SQLite
+jetable, `NODE_ENV=production`, `RATE_LIMIT_DISABLED` absent, UDP uniquement vers
+127.0.0.1. Il exerce statique, CRUD, tags, import/export, tokens, wake, planifications,
+statut, SSE, 404 et erreur JSON ; les trois limiteurs doivent répondre 429 au seuil.
+Le JSON malformé conserve le 500 historique du gestionnaire global ; les erreurs
+async sont désormais transmises à ce même gestionnaire par Express 5.
+
+Le second script construit une image `spark-deps-test-*` unique, puis vérifie health
+et l'écriture/relecture SQLite avec le durcissement Compose (read-only, tmpfs /tmp,
+cap-drop ALL + NET_RAW, no-new-privileges), en bridge et sur port publié éphémère.
+Ses conteneurs et son image sont supprimés à la sortie. Aucun test ne valide le WoL
+sur le LAN, l'affichage iPhone ou l'exécution distante des GitHub Actions.
+
+`npm outdated` est vide. `npm audit --omit=dev` ne trouve aucune vulnérabilité.
+L'audit complet reste en échec (4 alertes modérées, toutes dev) : minimatch **10.2.6**,
+via ESLint **10.14.0** et @eslint/config-array **0.23.5**, avec propagation à
+@eslint/js **10.0.1** — [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+La plage affectée est `>=7.0.0 <11.0.1` et aucune 10.x corrigée n'est publiée.
+`npm audit fix --force` propose de rétrograder ESLint en 9.39.5 ; conserver les dernières
+majeures demandées et attendre une correction compatible, sans imposer minimatch 11
+hors des plages supportées par ESLint. Le détail des versions, commits et preuves figure dans la
+description de la PR de mise à jour et dans l’historique Git.
+
+### Fermeture du logger de développement sous Node 26
+
+Un contrôle répété a révélé un `SIGSEGV` intermittent à la sortie de tests SQLite
+avec le transport pretty en worker ; il a été reproduit aussi avec Pino 9 et disparaît
+en production sans worker. Le logger de développement utilise désormais le
+[flux direct officiel pino-pretty](https://github.com/pinojs/pino-pretty#usage-as-a-stream)
+avec `sync: true`, qui termine ses écritures avant la sortie. Le format pretty,
+les niveaux et la redaction sont conservés ; les écritures dev sont synchrones.
+La production conserve ses logs JSON sans dépendre de pino-pretty. Un test ouvre,
+utilise et ferme SQLite dans dix processus courts de développement, puis vérifie
+la sortie et le masquage des secrets. Le scénario deviceStore a aussi passé
+30 répétitions après correction, sans modifier ses assertions ni désactiver les logs.

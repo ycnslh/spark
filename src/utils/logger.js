@@ -36,16 +36,17 @@ const baseOptions = {
   },
 };
 
-const transport = isDev
-  ? {
-      transport: {
-        target: 'pino-pretty',
-        options: { translateTime: 'SYS:standard', ignore: 'pid,hostname,app' },
-      },
-    }
-  : {};
+// Le flux pretty direct évite un worker lors de la fermeture des ressources natives
+// SQLite sous Node 26. Les logs de développement sont écrits avant la sortie.
+const destination = isDev
+  ? require('pino-pretty')({
+      sync: true,
+      translateTime: 'SYS:standard',
+      ignore: 'pid,hostname,app',
+    })
+  : undefined;
 
-const logger = pino({ ...baseOptions, ...transport });
+const logger = pino(baseOptions, destination);
 
 function wrap(method) {
   return (msg, meta) => {
