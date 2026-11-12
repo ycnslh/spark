@@ -14,6 +14,14 @@ async function request(url, options = {}) {
 }
 
 export const api = {
+  listTags: () => request('/api/tags'),
+  createTag: (name, color) =>
+    request('/api/tags', { method: 'POST', body: JSON.stringify({ name, color }) }),
+  deleteTag: (id) => request(`/api/tags/${id}`, { method: 'DELETE' }),
+  setDeviceTags: (id, tagIds) =>
+    request(`/api/devices/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tagIds }) }),
+  importData: (payload) =>
+    request('/api/import', { method: 'POST', body: JSON.stringify(payload) }),
   listSchedules: () => request('/api/schedules'),
   createSchedule: (id, payload) =>
     request(`/api/devices/${id}/schedules`, {

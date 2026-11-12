@@ -32,8 +32,8 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
-        fontSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
+        styleSrc: ["'self'"],
+        fontSrc: ["'self'"],
         scriptSrc: ["'self'"],
         imgSrc: ["'self'", 'data:'],
       },

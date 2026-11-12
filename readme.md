@@ -237,3 +237,55 @@ docker-compose up -d --build
 ## Licence
 
 MIT
+
+## Interface, thèmes et accessibilité
+
+L’interface utilise un système de variables CSS : surfaces, texte, accent vert, espacements,
+rayons et ombres. La grille des appareils s’adapte à la largeur disponible ; les tableaux
+s’affichent sous forme de cartes sous 1024 px. Sur téléphone, « Ajouter un appareil » reste
+accessible en bas de l’écran, avec les marges de sécurité iPhone. Les contrôles et leurs labels
+cliquables ont des cibles d’au moins 44 px. Les icônes sont dans `/icons.svg`, sans CDN ni police
+externe ; Helmet limite désormais aussi les styles et polices à la même origine.
+
+Au premier affichage, le thème suit `prefers-color-scheme`. Le bouton de thème mémorise le
+choix dans `localStorage` (`spark-theme`), avec gestion du stockage indisponible. Supprimer
+cette clé rétablit le suivi automatique du système. Le script local `js/theme.js`, chargé avant
+le CSS, évite un premier affichage dans le mauvais thème et synchronise `meta theme-color`.
+La page hors ligne et les résultats des liens de réveil utilisent le même thème.
+
+La navigation comprend un lien d’évitement, des repères et titres, des labels et des messages
+liés aux champs. Les modales isolent le fond avec `inert`, piègent Tab/Maj+Tab, se ferment avec
+Échap et restituent le focus. Le statut se lit en texte, et les mises à jour SSE, résultats de
+réveil et erreurs sont annoncés dans des régions polies. Les animations respectent
+`prefers-reduced-motion`. Les couleurs des tags restent conservées dans l’API et les exports ;
+les puces utilisent une palette neutre pour garantir leur contraste, quelle que soit la couleur
+choisie. Les tags s’ajoutent dans « Organiser et sauvegarder » et s’associent aux appareils
+dans leur formulaire. La recherche couvre aussi les tags, avec un filtre dédié.
+
+L’import/export conserve les endpoints existants et ne contient ni tokens ni planifications.
+L’import demande une confirmation, affiche le bilan et accepte au maximum 512 Ko. Les secrets
+de tokens restent seulement en mémoire et disparaissent à la fermeture de leur panneau.
+
+Validation de cette refonte : Chromium headless (le navigateur intégré Orca était indisponible),
+rendu à 320, 375, 768, 1280 et 1440 px dans les deux thèmes, parcours clavier, analyse axe et navigation
+hors ligne avec un véritable service worker. Les tests Node calculent les contrastes depuis les
+variables CSS : minimum texte de **5,58:1 en clair** et **6,68:1 en sombre**, contrôles et focus
+au moins 3:1. Les captures et rapports restent hors Git sous `/tmp/spark-interface-captures/`
+(par exemple `320-light.png`, `1280-dark.png`, `modal-320-light.png`, `offline.png`). Ils ne
+remplacent pas des essais sur iPhone physique ni avec un véritable lecteur d’écran.
+
+Pour reprendre la validation : redémarrer le serveur après toute modification des assets afin
+de recalculer le hash PWA, puis relancer sous Node 22 :
+
+```bash
+npx --yes --package=node@22 --call "npm run lint"
+npx --yes --package=node@22 --call "npm run format:check"
+npx --yes --package=node@22 --call "npm test"
+```
+
+Pour une prévisualisation isolée, utiliser une base temporaire sous `/tmp`, une écoute locale sur
+un port libre, `AUTH_USER=` et `AUTH_PASS=`, `WOL_BROADCAST=127.0.0.1`,
+`WOL_ALL_INTERFACES=false`, `WOL_REPEAT_DELAY_MS=0` et `SCHEDULER_ENABLED=false`.
+Ne pas charger une base de production. Les essais automatisés rapides peuvent utiliser
+`RATE_LIMIT_DISABLED=1` uniquement dans cette prévisualisation isolée : les téléchargements
+parallèles d’assets et les connexions SSE peuvent sinon rencontrer le limiteur existant.

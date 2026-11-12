@@ -2,43 +2,82 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#121212" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f5f7f8" />
     <title>Spark</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
+    <script src="/js/theme.js"></script>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <div class="container">
-      <header>
-        <h1>Spark</h1>
-      </header>
+    <a class="skip-link" href="#main-content">Aller au contenu</a>
+    <header class="app-header container">
+      <a class="brand" href="/" aria-label="Spark, accueil"
+        ><img src="/icon.svg" width="40" height="40" alt="" /><span
+          >Spark<span class="brand-caption">Wake-on-LAN</span></span
+        ></a
+      >
+      <nav class="main-nav" aria-label="Navigation principale">
+        <a href="#devices-heading">Appareils</a><a href="#schedules-heading">Planification</a
+        ><a href="#links-heading">Raccourcis</a>
+      </nav>
+      <button
+        id="theme-toggle"
+        class="copy-button"
+        type="button"
+        aria-label="Activer le thème sombre"
+        aria-pressed="false"
+      >
+        Thème sombre
+      </button>
+    </header>
+    <main id="main-content" class="container" tabindex="-1">
+      <div class="intro">
+        <p class="eyebrow">VOTRE RÉSEAU, À PORTÉE DE MAIN</p>
+        <h1>Un réveil. Et c’est parti.</h1>
+        <p>Retrouvez vos appareils et réveillez-les en un geste.</p>
+        <p id="connection-status" class="connection-status" role="status" aria-live="polite">
+          Connexion au serveur…
+        </p>
+      </div>
 
       <section class="section" aria-labelledby="devices-heading">
         <div class="section-header">
-          <h2 id="devices-heading" class="section-title">Mes appareils</h2>
+          <div>
+            <p class="eyebrow">TABLEAU DE BORD</p>
+            <h2 id="devices-heading" class="section-title">
+              Mes appareils <span id="device-count" class="count"></span>
+            </h2>
+          </div>
           <div class="section-tools">
-            <input
-              id="search-input"
-              type="search"
-              placeholder="Rechercher…"
-              aria-label="Rechercher un appareil"
-              autocomplete="off"
-            />
+            <div class="search-field">
+              <label for="search-input">Rechercher un appareil</label>
+              <input
+                id="search-input"
+                type="search"
+                placeholder="Rechercher…"
+                aria-label="Rechercher un appareil"
+                autocomplete="off"
+              />
+            </div>
+            <div class="filter-field">
+              <label for="tag-filter">Filtrer par tag</label
+              ><select id="tag-filter">
+                <option value="">Tous les tags</option>
+              </select>
+            </div>
             <button id="add-device-btn" class="btn">
-              <i class="fas fa-plus" aria-hidden="true"></i> Ajouter un appareil
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#plus"></use></svg> Ajouter
+              un appareil
             </button>
           </div>
         </div>
-        <div id="devices-container" class="device-grid">
-          <div class="empty-state">
-            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+        <p id="search-feedback" class="sr-only" role="status" aria-live="polite"></p>
+        <div id="devices-container" class="device-grid" aria-busy="true">
+          <div class="empty-state" role="status">
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg#spinner"></use></svg>
             <p>Chargement des appareils&hellip;</p>
           </div>
         </div>
@@ -62,7 +101,13 @@
           Les heures suivent le fuseau du serveur (SCHEDULER_TZ si configuré). Les réveils manqués
           pendant un arrêt ou une pause ne sont pas rattrapés.
         </p>
-        <p id="schedule-feedback" role="status" aria-live="polite"></p>
+        <p
+          id="schedule-feedback"
+          class="feedback"
+          role="status"
+          aria-live="polite"
+          tabindex="-1"
+        ></p>
         <div
           class="schedule-table-scroll"
           role="region"
@@ -88,30 +133,98 @@
             </tbody>
           </table>
         </div>
+        <h3 class="form-heading">Nouveau réveil planifié</h3>
         <form id="schedule-form" class="schedule-form">
           <div class="form-group">
             <label for="schedule-device">Appareil</label>
-            <select id="schedule-device" required>
+            <select aria-describedby="schedule-feedback" id="schedule-device" required>
               <option value="">Sélectionnez un appareil</option>
             </select>
           </div>
           <div class="form-group">
             <label for="schedule-time">Heure</label>
-            <input id="schedule-time" type="time" step="60" required />
+            <input
+              aria-describedby="schedule-feedback"
+              id="schedule-time"
+              type="time"
+              step="60"
+              required
+            />
           </div>
           <div class="form-group">
             <label for="schedule-label">Libellé (facultatif)</label>
-            <input id="schedule-label" type="text" maxlength="60" />
+            <input
+              aria-describedby="schedule-feedback"
+              id="schedule-label"
+              type="text"
+              maxlength="60"
+            />
           </div>
           <fieldset class="schedule-days">
             <legend>Jours de la semaine (au moins un)</legend>
-            <label><input type="checkbox" name="schedule-day" value="1" /> Lundi</label>
-            <label><input type="checkbox" name="schedule-day" value="2" /> Mardi</label>
-            <label><input type="checkbox" name="schedule-day" value="3" /> Mercredi</label>
-            <label><input type="checkbox" name="schedule-day" value="4" /> Jeudi</label>
-            <label><input type="checkbox" name="schedule-day" value="5" /> Vendredi</label>
-            <label><input type="checkbox" name="schedule-day" value="6" /> Samedi</label>
-            <label><input type="checkbox" name="schedule-day" value="0" /> Dimanche</label>
+            <label
+              ><input
+                type="checkbox"
+                aria-describedby="schedule-feedback"
+                name="schedule-day"
+                value="1"
+              />
+              Lundi</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                aria-describedby="schedule-feedback"
+                name="schedule-day"
+                value="2"
+              />
+              Mardi</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                aria-describedby="schedule-feedback"
+                name="schedule-day"
+                value="3"
+              />
+              Mercredi</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                aria-describedby="schedule-feedback"
+                name="schedule-day"
+                value="4"
+              />
+              Jeudi</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                aria-describedby="schedule-feedback"
+                name="schedule-day"
+                value="5"
+              />
+              Vendredi</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                aria-describedby="schedule-feedback"
+                name="schedule-day"
+                value="6"
+              />
+              Samedi</label
+            >
+            <label
+              ><input
+                type="checkbox"
+                aria-describedby="schedule-feedback"
+                name="schedule-day"
+                value="0"
+              />
+              Dimanche</label
+            >
           </fieldset>
           <button class="btn" type="submit">Ajouter une planification</button>
         </form>
@@ -128,22 +241,94 @@
         <table>
           <thead>
             <tr>
-              <th>Appareil</th>
-              <th>Lien direct</th>
-              <th>Action</th>
+              <th scope="col">Appareil</th>
+              <th scope="col">Lien direct</th>
+              <th scope="col">Action</th>
             </tr>
           </thead>
           <tbody id="direct-links-tbody">
             <tr>
               <td colspan="3" class="empty-state">
-                <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                <svg class="icon" aria-hidden="true"><use href="/icons.svg#spinner"></use></svg>
                 <p>Chargement&hellip;</p>
               </td>
             </tr>
           </tbody>
         </table>
       </section>
-    </div>
+      <section class="section" aria-labelledby="settings-heading">
+        <p class="eyebrow">À VOTRE FAÇON</p>
+        <h2 id="settings-heading">Organiser et sauvegarder</h2>
+        <div class="settings-grid">
+          <div>
+            <h3>Tags</h3>
+            <p class="section-help">
+              Regroupez vos appareils. Associez les tags depuis leur fiche de modification.
+            </p>
+            <div id="tags-list" class="tags-list"></div>
+            <form id="tag-form" class="tag-form">
+              <div class="form-group">
+                <label for="tag-name">Nom du tag</label
+                ><input id="tag-name" maxlength="30" required aria-describedby="tag-feedback" />
+              </div>
+              <div class="form-group">
+                <label for="tag-color">Couleur</label
+                ><input
+                  id="tag-color"
+                  type="color"
+                  value="#007568"
+                  aria-describedby="tag-feedback"
+                />
+              </div>
+              <button class="copy-button" type="submit">Créer le tag</button>
+            </form>
+            <p
+              id="tag-feedback"
+              class="feedback"
+              role="status"
+              aria-live="polite"
+              tabindex="-1"
+            ></p>
+          </div>
+          <div>
+            <h3>Import et export</h3>
+            <p class="section-help">
+              Sauvegardez vos appareils et leurs tags au format JSON. Les tokens et les
+              planifications ne sont pas exportés.
+            </p>
+            <div class="backup-actions">
+              <a class="copy-button" href="/api/export" download="spark-export.json"
+                >Exporter les appareils</a
+              >
+            </div>
+            <form id="import-form">
+              <div class="form-group">
+                <label for="import-file">Fichier Spark (.json)</label
+                ><input
+                  id="import-file"
+                  type="file"
+                  accept=".json,application/json"
+                  required
+                  aria-describedby="import-feedback"
+                />
+              </div>
+              <button class="copy-button" type="submit">Importer les appareils</button>
+            </form>
+            <p
+              id="import-feedback"
+              class="feedback"
+              role="status"
+              aria-live="polite"
+              tabindex="-1"
+            ></p>
+          </div>
+        </div>
+      </section>
+      <footer class="app-footer">
+        <span>Spark · Un peu d’énergie pour votre réseau.</span
+        ><a href="#main-content">Retour en haut</a>
+      </footer>
+    </main>
 
     <div
       id="add-device-modal"
@@ -156,14 +341,22 @@
         <div class="modal-header">
           <h3 id="modal-title" class="modal-title">Ajouter un appareil</h3>
           <button id="close-modal-btn" class="close-modal-btn" aria-label="Fermer">
-            <i class="fas fa-times" aria-hidden="true"></i>
+            <svg class="icon" aria-hidden="true"><use href="/icons.svg#times"></use></svg>
           </button>
         </div>
+        <p id="device-feedback" class="feedback" role="status" aria-live="polite" tabindex="-1"></p>
         <form id="add-device-form">
           <input type="hidden" id="device-id" value="" />
           <div class="form-group">
             <label for="device-name">Nom</label>
-            <input type="text" id="device-name" maxlength="50" required autocomplete="off" />
+            <input
+              type="text"
+              id="device-name"
+              maxlength="50"
+              required
+              autocomplete="off"
+              aria-describedby="device-feedback"
+            />
           </div>
           <div class="form-group">
             <label for="device-mac">Adresse MAC</label>
@@ -173,8 +366,9 @@
               placeholder="XX:XX:XX:XX:XX:XX"
               required
               autocomplete="off"
+              aria-describedby="device-feedback device-mac-hint"
             />
-            <div class="hint">Format XX:XX:XX:XX:XX:XX ou XXXXXXXXXXXX</div>
+            <div class="hint" id="device-mac-hint">Format XX:XX:XX:XX:XX:XX ou XXXXXXXXXXXX</div>
           </div>
           <div class="form-group">
             <label for="device-ip">Adresse IP (IPv4, optionnel)</label>
@@ -184,8 +378,9 @@
               maxlength="15"
               placeholder="192.168.1.42"
               autocomplete="off"
+              aria-describedby="device-feedback device-ip-hint"
             />
-            <div class="hint">
+            <div class="hint" id="device-ip-hint">
               Adresse utilisée en priorité pour vérifier le statut et confirmer les réveils.
             </div>
           </div>
@@ -198,8 +393,9 @@
               max="65535"
               step="1"
               placeholder="Ex. 3389"
+              aria-describedby="device-feedback device-probe_port-hint"
             />
-            <div class="hint">
+            <div class="hint" id="device-probe_port-hint">
               Vide : sondes sur les ports 22, 3389, 445 et 80 après le ping ICMP.
             </div>
           </div>
@@ -213,8 +409,9 @@
                 maxlength="15"
                 placeholder="192.168.1.255"
                 autocomplete="off"
+                aria-describedby="device-feedback device-broadcast-hint"
               />
-              <div class="hint">
+              <div class="hint" id="device-broadcast-hint">
                 Vide : réglages globaux. Renseigné : seule cette cible reçoit les paquets de cet
                 appareil.
               </div>
@@ -227,8 +424,9 @@
                 maxlength="253"
                 placeholder="192.168.1.42"
                 autocomplete="off"
+                aria-describedby="device-feedback device-host-hint"
               />
-              <div class="hint">
+              <div class="hint" id="device-host-hint">
                 Utilisé si l’adresse IP est vide, avant l’ancienne IP en description.
               </div>
             </div>
@@ -240,12 +438,17 @@
               rows="2"
               maxlength="200"
               placeholder="Note libre"
+              aria-describedby="device-feedback"
             ></textarea>
           </div>
+          <fieldset id="device-tags-options" class="schedule-days">
+            <legend>Tags de l’appareil</legend>
+            <p>Créez vos tags dans « Organiser et sauvegarder ».</p>
+          </fieldset>
           <div class="form-buttons">
             <button type="button" id="cancel-add-btn" class="btn cancel-button">Annuler</button>
             <button type="submit" class="btn" id="submit-device-btn">
-              <i class="fas fa-plus" aria-hidden="true"></i> Ajouter
+              <svg class="icon" aria-hidden="true"><use href="/icons.svg#plus"></use></svg> Ajouter
             </button>
           </div>
         </form>

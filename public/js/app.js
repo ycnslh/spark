@@ -2,11 +2,12 @@ import { api } from './api.js';
 import {
   toast,
   confirmDialog,
-  attachRipple,
+  icon,
+  setIcon,
+  activateDialog,
   copyToClipboard,
   formatMac,
   formatDate,
-  focusableElements,
 } from './ui.js';
 
 const devicesContainer = document.getElementById('devices-container');
@@ -22,33 +23,52 @@ const searchInput = document.getElementById('search-input');
 
 let currentDevices = [];
 let searchTerm = '';
+let selectedTag = '';
+let currentTags = [];
+const connectionStatus = document.getElementById('connection-status');
 // Secrets éphémères : aucune persistance dans le stockage du navigateur.
 const newTokenLinks = new Map();
 const statuses = new Map();
 const wakeStates = new Map();
 
 async function refresh() {
+  devicesContainer.setAttribute('aria-busy', 'true');
   try {
-    currentDevices = await api.listDevices();
+    [currentDevices, currentTags] = await Promise.all([api.listDevices(), api.listTags()]);
+    renderTags();
     renderAll();
     await refreshSchedules();
     pollStatus();
   } catch (err) {
     console.error(err);
+    devicesContainer.replaceChildren();
+    const error = document.createElement('div');
+    error.className = 'empty-state';
+    const message = document.createElement('p');
+    message.textContent = 'Impossible de charger les appareils. Vérifiez la connexion au serveur.';
+    const retry = document.createElement('button');
+    retry.className = 'copy-button';
+    retry.textContent = 'Réessayer';
+    retry.addEventListener('click', refresh);
+    error.append(message, retry);
+    devicesContainer.appendChild(error);
     toast('Erreur lors du chargement des appareils', 'error');
+  } finally {
+    devicesContainer.setAttribute('aria-busy', 'false');
   }
 }
 
 function filteredDevices() {
-  if (!searchTerm) return currentDevices;
   const q = searchTerm.toLowerCase();
   return currentDevices.filter(
     (d) =>
-      d.name.toLowerCase().includes(q) ||
-      (d.ip || '').includes(q) ||
-      (d.host || '').toLowerCase().includes(q) ||
-      (d.description || '').toLowerCase().includes(q) ||
-      d.mac.toLowerCase().includes(q)
+      (!selectedTag || d.tags?.some((tag) => String(tag.id) === selectedTag)) &&
+      (d.name.toLowerCase().includes(q) ||
+        (d.ip || '').includes(q) ||
+        (d.host || '').toLowerCase().includes(q) ||
+        (d.description || '').toLowerCase().includes(q) ||
+        d.mac.toLowerCase().includes(q) ||
+        d.tags?.some((tag) => tag.name.toLowerCase().includes(q)))
   );
 }
 
@@ -56,15 +76,29 @@ function renderAll() {
   const list = filteredDevices();
   renderDevices(list);
   renderDirectLinks(list);
+  document.getElementById('device-count').textContent = String(currentDevices.length);
+  document.getElementById('search-feedback').textContent =
+    `${list.length} appareil${list.length > 1 ? 's' : ''} affiché${list.length > 1 ? 's' : ''}.`;
 }
 
 function renderDevices(devices) {
+  const active = devicesContainer.contains(document.activeElement) ? document.activeElement : null;
+  const focusedId = active?.closest('[data-device-id]')?.dataset.deviceId;
+  const focusedAction = active?.dataset.action;
+  const restoreFocus = () => {
+    if (!active) return;
+    const replacement = [...devicesContainer.querySelectorAll('[data-device-id]')]
+      .find((card) => card.dataset.deviceId === focusedId)
+      ?.querySelector(`[data-action="${focusedAction}"]`);
+    (replacement || addDeviceBtn).focus();
+  };
   if (devices.length === 0) {
     devicesContainer.innerHTML = `
       <div class="empty-state">
-        <i class="fas fa-laptop" aria-hidden="true"></i>
+        ${icon('laptop')}
         <p>${currentDevices.length === 0 ? 'Aucun appareil. Ajoutez votre premier appareil.' : 'Aucun résultat.'}</p>
       </div>`;
+    restoreFocus();
     return;
   }
 
@@ -76,28 +110,28 @@ function renderDevices(devices) {
     card.innerHTML = `
       <div class="device-header">
         <h3 class="device-name">
-          <span class="status-dot" data-status="unknown" aria-hidden="true" title="Cliquer pour rafraîchir"></span>
           <span></span>
         </h3>
         <div class="device-actions">
           <button class="icon-btn" data-action="edit" aria-label="Modifier">
-            <i class="fas fa-pen" aria-hidden="true"></i>
+            ${icon('pen')}
           </button>
           <button class="icon-btn" data-action="history" aria-label="Historique">
-            <i class="fas fa-history" aria-hidden="true"></i>
+            ${icon('history')}
           </button>
           <button class="icon-btn danger" data-action="delete" aria-label="Supprimer">
-            <i class="fas fa-trash-alt" aria-hidden="true"></i>
+            ${icon('trash-alt')}
           </button>
         </div>
       </div>
+      <button class="status-control" type="button"><span class="status-dot" aria-hidden="true"></span><span class="status-label" aria-live="polite">État inconnu</span><span class="sr-only"> — actualiser le statut</span></button>
       <div class="device-mac"></div>
       <div class="device-ip"></div>
       <div class="device-host"></div>
       <div class="device-desc"></div>
       <div class="device-tags"></div>
       <button class="glass-button wake-button" data-action="wake">
-        <i class="fas fa-power-off" aria-hidden="true"></i>
+        ${icon('power-off')} Réveiller
       </button>
       <p class="wake-state" role="status" aria-live="polite" aria-atomic="true"></p>
       <details class="token-panel">
@@ -123,7 +157,6 @@ function renderDevices(devices) {
       for (const t of device.tags) {
         const chip = document.createElement('span');
         chip.className = 'tag-chip';
-        if (t.color) chip.style.setProperty('--tag-color', t.color);
         chip.textContent = t.name;
         tagsContainer.appendChild(chip);
       }
@@ -131,7 +164,6 @@ function renderDevices(devices) {
 
     const wakeBtn = card.querySelector('[data-action="wake"]');
     wakeBtn.setAttribute('aria-label', `Réveiller ${device.name}`);
-    attachRipple(wakeBtn);
     wakeBtn.addEventListener('click', () => wakeDevice(device, wakeBtn));
     card
       .querySelector('[data-action="edit"]')
@@ -143,9 +175,31 @@ function renderDevices(devices) {
       .querySelector('[data-action="history"]')
       .addEventListener('click', () => toggleHistory(card, device));
     card
-      .querySelector('.status-dot')
+      .querySelector('.status-control')
       .addEventListener('click', () => refreshDeviceStatus(device, card));
 
+    for (const [action, label] of [
+      ['edit', 'Modifier'],
+      ['history', 'Historique de'],
+      ['delete', 'Supprimer'],
+    ]) {
+      card
+        .querySelector(`[data-action="${action}"]`)
+        .setAttribute('aria-label', `${label} ${device.name}`);
+    }
+    const historyButton = card.querySelector('[data-action="history"]');
+    historyButton.setAttribute('aria-expanded', 'false');
+    card.querySelector('.history-panel').id = `history-${device.id}`;
+    historyButton.setAttribute('aria-controls', `history-${device.id}`);
+    const tokenInput = card.querySelector('[name="label"]');
+    tokenInput.id = `token-label-${device.id}`;
+    tokenInput.closest('label').htmlFor = tokenInput.id;
+    const tokenError = document.createElement('p');
+    tokenError.id = `token-error-${device.id}`;
+    tokenError.className = 'feedback';
+    tokenError.setAttribute('role', 'status');
+    tokenInput.setAttribute('aria-describedby', tokenError.id);
+    card.querySelector('.token-form').appendChild(tokenError);
     const tokenPanel = card.querySelector('.token-panel');
     tokenPanel.addEventListener('toggle', () => {
       if (tokenPanel.open) loadTokens(tokenPanel, device);
@@ -165,6 +219,7 @@ function renderDevices(devices) {
     applyStatus(device.id, statuses.get(device.id) ?? null);
     renderWakeState(device.id);
   }
+  restoreFocus();
 }
 
 function renderDirectLinks(devices) {
@@ -178,9 +233,9 @@ function renderDirectLinks(devices) {
     const url = newTokenLinks.get(device.id)?.url;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td></td>
-      <td class="link-cell"><a target="_blank" rel="noopener"></a></td>
-      <td><button class="copy-button" aria-label="Copier le lien"><i class="fas fa-copy" aria-hidden="true"></i> Copier</button></td>`;
+      <td data-label="Appareil"></td>
+      <td data-label="Lien direct" class="link-cell"><a target="_blank" rel="noopener"></a></td>
+      <td data-label="Action"><button class="copy-button" aria-label="Copier le lien">${icon('copy')} Copier</button></td>`;
     tr.querySelector('td:first-child').textContent = device.name;
     const a = tr.querySelector('a');
     if (url) a.href = url;
@@ -191,12 +246,8 @@ function renderDirectLinks(devices) {
       try {
         await copyToClipboard(url);
         toast('Lien copié', 'success', 2000);
-        const icon = button.querySelector('i');
-        const original = icon.className;
-        icon.className = 'fas fa-check';
-        setTimeout(() => {
-          icon.className = original;
-        }, 1500);
+        setIcon(button, 'check');
+        setTimeout(() => setIcon(button, 'copy'), 1500);
       } catch {
         toast('Erreur de copie', 'error');
       }
@@ -280,6 +331,7 @@ async function createDeviceToken(panel, device) {
   const form = panel.querySelector('form');
   const submit = form.querySelector('button');
   submit.disabled = true;
+  panel.querySelector('.feedback').textContent = '';
   try {
     const created = await api.createToken(device.id, form.elements.label.value);
     newTokenLinks.set(device.id, created);
@@ -288,40 +340,41 @@ async function createDeviceToken(panel, device) {
     renderDirectLinks(filteredDevices());
     await loadTokens(panel, device);
   } catch (err) {
-    toast(err.message || 'Erreur de création du token', 'error');
+    panel.querySelector('.feedback').textContent = err.message || 'Erreur de création du token';
   } finally {
     submit.disabled = false;
   }
 }
 
 async function wakeDevice(device, button) {
-  const icon = button.querySelector('i');
-  const originalClass = icon.className;
   button.disabled = true;
-  icon.className = 'fas fa-spinner fa-spin';
+  setIcon(button, 'spinner');
+  button.setAttribute('aria-busy', 'true');
   button.classList.add('wake-sending');
   setWakeState(device.id, 'sending');
 
   try {
     await api.wakeDevice(device.mac);
     if (wakeStates.get(device.id) === 'sending') setWakeState(device.id, 'sent');
-    icon.className = 'fas fa-check';
+    setIcon(button, 'check');
     button.classList.remove('wake-sending');
     button.classList.add('wake-success');
     toast(`Réveil envoyé à ${device.name}`, 'success');
     setTimeout(() => {
-      icon.className = originalClass;
+      setIcon(button, 'power-off');
+      button.removeAttribute('aria-busy');
       button.classList.remove('wake-success');
       button.disabled = false;
     }, 3000);
   } catch (err) {
     setWakeState(device.id, 'failed');
-    icon.className = 'fas fa-exclamation-circle';
+    setIcon(button, 'exclamation-circle');
     button.classList.remove('wake-sending');
     button.classList.add('wake-error');
     toast(err.message || 'Erreur lors du réveil', 'error');
     setTimeout(() => {
-      icon.className = originalClass;
+      setIcon(button, 'power-off');
+      button.removeAttribute('aria-busy');
       button.classList.remove('wake-error');
       button.disabled = false;
     }, 3000);
@@ -344,12 +397,15 @@ async function deleteDevice(device) {
 async function refreshDeviceStatus(device, card) {
   const dot = card.querySelector('.status-dot');
   dot.classList.add('checking');
+  card.querySelector('.status-control').setAttribute('aria-busy', 'true');
   try {
     const { online } = await api.refreshStatus(device.id);
     applyStatus(device.id, online);
   } catch {
     dot.classList.remove('checking');
     toast('Erreur de vérification', 'error');
+  } finally {
+    card.querySelector('.status-control').removeAttribute('aria-busy');
   }
 }
 
@@ -357,9 +413,11 @@ async function toggleHistory(card, device) {
   const panel = card.querySelector('.history-panel');
   if (!panel.hidden) {
     panel.hidden = true;
+    card.querySelector('[data-action="history"]').setAttribute('aria-expanded', 'false');
     return;
   }
   panel.hidden = false;
+  card.querySelector('[data-action="history"]').setAttribute('aria-expanded', 'true');
   panel.innerHTML = '<p>Chargement…</p>';
   try {
     const history = await api.getHistory(device.id);
@@ -403,6 +461,8 @@ function applyStatus(id, online) {
   dot.classList.remove('online', 'offline', 'checking');
   if (online === true) dot.classList.add('online');
   else if (online === false) dot.classList.add('offline');
+  card.querySelector('.status-label').textContent =
+    online === true ? 'En ligne' : online === false ? 'Hors ligne' : 'État inconnu';
   dot.title =
     online === true
       ? 'En ligne — cliquer pour rafraîchir'
@@ -442,6 +502,7 @@ async function pollStatus() {
   try {
     const statuses = await api.getStatus();
     if (eventSource && eventSource.readyState === 1) return;
+    connectionStatus.textContent = 'Statuts actualisés · vérification toutes les 30 s';
     for (const { id, online } of statuses) applyStatus(id, online);
     syncPendingWakes();
   } catch {
@@ -478,6 +539,7 @@ function startStream() {
     return;
   }
   eventSource.addEventListener('snapshot', (e) => {
+    connectionStatus.textContent = 'Statuts en direct · connecté';
     const list = JSON.parse(e.data);
     statuses.clear();
     for (const device of currentDevices) applyStatus(device.id, null);
@@ -505,6 +567,7 @@ function startStream() {
   });
   // EventSource se reconnecte seul ; le snapshot resynchronise les pastilles.
   eventSource.addEventListener('error', () => {
+    connectionStatus.textContent = 'Connexion interrompue · nouvelle tentative automatique';
     startPolling();
     if (eventSource?.readyState === 2) {
       eventSource.close();
@@ -543,33 +606,22 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-let lastFocusedBeforeModal = null;
-
-function trapTab(e) {
-  if (e.key !== 'Tab' || !modal.classList.contains('open')) return;
-  const focusables = focusableElements(modal);
-  if (focusables.length === 0) return;
-  const first = focusables[0];
-  const last = focusables[focusables.length - 1];
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault();
-    last.focus();
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault();
-    first.focus();
-  }
-}
+let deactivateDeviceDialog = null;
 
 function openModal({ edit = null } = {}) {
-  lastFocusedBeforeModal = document.activeElement;
+  document.getElementById('device-feedback').textContent = '';
+  renderDeviceTags(edit?.tags || []);
   addDeviceForm.reset();
+  addDeviceForm
+    .querySelectorAll('[aria-invalid]')
+    .forEach((input) => input.removeAttribute('aria-invalid'));
   document.getElementById('device-network-options').open = false;
   for (const field of ['ip', 'broadcast', 'probe_port']) {
     document.getElementById(`device-${field}`).value = edit?.[field] ?? '';
   }
   if (edit) {
     modalTitle.textContent = "Modifier l'appareil";
-    submitDeviceBtn.innerHTML = '<i class="fas fa-save" aria-hidden="true"></i> Enregistrer';
+    submitDeviceBtn.innerHTML = `${icon('save')} Enregistrer`;
     document.getElementById('device-id').value = edit.id;
     document.getElementById('device-name').value = edit.name;
     document.getElementById('device-mac').value = edit.mac;
@@ -578,23 +630,21 @@ function openModal({ edit = null } = {}) {
     document.getElementById('device-description').value = edit.description || '';
   } else {
     modalTitle.textContent = 'Ajouter un appareil';
-    submitDeviceBtn.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i> Ajouter';
+    submitDeviceBtn.innerHTML = `${icon('plus')} Ajouter`;
     document.getElementById('device-id').value = '';
     document.getElementById('device-mac').disabled = false;
   }
-  modal.classList.add('open');
+  deactivateDeviceDialog = activateDialog(modal, closeModal);
   document.getElementById('device-name').focus();
 }
 function openEditModal(device) {
   openModal({ edit: device });
 }
 function closeModal() {
-  modal.classList.remove('open');
+  deactivateDeviceDialog?.();
+  deactivateDeviceDialog = null;
   addDeviceForm.reset();
   document.getElementById('device-mac').disabled = false;
-  if (lastFocusedBeforeModal && lastFocusedBeforeModal.focus) {
-    lastFocusedBeforeModal.focus();
-  }
 }
 
 addDeviceBtn.addEventListener('click', () => openModal());
@@ -602,10 +652,6 @@ closeModalBtn.addEventListener('click', closeModal);
 cancelAddBtn.addEventListener('click', closeModal);
 modal.addEventListener('click', (e) => {
   if (e.target === modal) closeModal();
-});
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
-  trapTab(e);
 });
 
 if (searchInput) {
@@ -628,18 +674,37 @@ addDeviceForm.addEventListener('submit', async (event) => {
   const port = document.getElementById('device-probe_port').value;
   const probe_port = port === '' ? null : Number(port);
   const payload = { name, host, description, ip, broadcast, probe_port };
+  submitDeviceBtn.disabled = true;
+  submitDeviceBtn.setAttribute('aria-busy', 'true');
+  const feedback = document.getElementById('device-feedback');
+  feedback.textContent = '';
   try {
+    let savedId = Number(id);
     if (id) {
       await api.updateDevice(parseInt(id, 10), payload);
       toast('Appareil modifié', 'success');
     } else {
-      await api.createDevice({ ...payload, mac });
+      const result = await api.createDevice({ ...payload, mac });
+      savedId = result.device.id;
+      // Keep a successfully created device in edit mode if assigning its tags fails.
+      document.getElementById('device-id').value = savedId;
+      document.getElementById('device-mac').disabled = true;
       toast('Appareil ajouté', 'success');
     }
+    await api.setDeviceTags(
+      savedId,
+      [...document.querySelectorAll('[name="device-tag"]:checked')].map((input) =>
+        Number(input.value)
+      )
+    );
     closeModal();
     refresh();
   } catch (err) {
-    toast(err.message || 'Erreur', 'error');
+    feedback.textContent = err.message || 'Erreur d’enregistrement';
+    feedback.focus();
+  } finally {
+    submitDeviceBtn.disabled = false;
+    submitDeviceBtn.removeAttribute('aria-busy');
   }
 });
 
@@ -703,8 +768,14 @@ function renderSchedules(schedules, paused) {
       schedule.last_run_at ? new Date(schedule.last_run_at).toLocaleString('fr-FR') : 'Jamais',
       statusLabels[schedule.last_status] || '—',
     ];
-    for (const value of values) row.insertCell().textContent = value;
+    const labels = ['Appareil / libellé', 'Heure', 'Jours', 'État', 'Dernière exécution', 'Statut'];
+    values.forEach((value, index) => {
+      const cell = row.insertCell();
+      cell.dataset.label = labels[index];
+      cell.textContent = value;
+    });
     const actions = row.insertCell();
+    actions.dataset.label = 'Actions';
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'copy-button';
@@ -748,6 +819,7 @@ function renderSchedules(schedules, paused) {
 
 async function scheduleAction(button, action) {
   button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
   try {
     await action();
     await scheduleRequest;
@@ -756,6 +828,7 @@ async function scheduleAction(button, action) {
     scheduleFeedback.textContent = err.message;
   } finally {
     button.disabled = false;
+    button.removeAttribute('aria-busy');
   }
 }
 
@@ -799,6 +872,134 @@ schedulePause.addEventListener('change', async () => {
     await refreshSchedules();
   }
 });
+
+document.getElementById('tag-filter').addEventListener('change', (event) => {
+  selectedTag = event.target.value;
+  renderAll();
+});
+
+function renderTags() {
+  const filter = document.getElementById('tag-filter');
+  filter.replaceChildren(new Option('Tous les tags', ''));
+  const list = document.getElementById('tags-list');
+  list.replaceChildren();
+  for (const tag of currentTags) {
+    filter.add(new Option(tag.name, tag.id));
+    const remove = document.createElement('button');
+    remove.className = 'copy-button';
+    remove.textContent = `${tag.name} ×`;
+    remove.setAttribute('aria-label', `Supprimer le tag ${tag.name}`);
+    remove.addEventListener('click', async () => {
+      if (!(await confirmDialog(`Supprimer le tag « ${tag.name} » de tous les appareils ?`)))
+        return;
+      remove.disabled = true;
+      try {
+        await api.deleteTag(tag.id);
+        await refresh();
+        document.getElementById('tag-name').focus();
+      } catch (err) {
+        toast(err.message, 'error');
+        remove.disabled = false;
+      }
+    });
+    list.appendChild(remove);
+  }
+  if (!currentTags.some((tag) => String(tag.id) === selectedTag)) selectedTag = '';
+  filter.value = selectedTag;
+  if (!currentTags.length) list.textContent = 'Aucun tag pour le moment.';
+}
+
+function renderDeviceTags(tags) {
+  const fieldset = document.getElementById('device-tags-options');
+  fieldset.replaceChildren();
+  const legend = document.createElement('legend');
+  legend.textContent = 'Tags de l’appareil';
+  fieldset.appendChild(legend);
+  for (const tag of currentTags) {
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = 'device-tag';
+    input.id = `device-tag-${tag.id}`;
+    input.value = tag.id;
+    input.checked = tags.some((item) => item.id === tag.id);
+    input.setAttribute('aria-describedby', 'device-feedback');
+    label.htmlFor = input.id;
+    label.append(input, document.createTextNode(tag.name));
+    fieldset.appendChild(label);
+  }
+  if (!currentTags.length) {
+    const help = document.createElement('p');
+    help.textContent = 'Créez vos tags dans « Organiser et sauvegarder ».';
+    fieldset.appendChild(help);
+  }
+}
+
+document.getElementById('tag-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.target.querySelector('button');
+  button.disabled = true;
+  const feedback = document.getElementById('tag-feedback');
+  try {
+    await api.createTag(
+      document.getElementById('tag-name').value.trim(),
+      document.getElementById('tag-color').value
+    );
+    event.target.reset();
+    feedback.textContent = 'Tag créé.';
+    await refresh();
+  } catch (err) {
+    feedback.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+document.getElementById('import-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.target.querySelector('button');
+  const feedback = document.getElementById('import-feedback');
+  const file = document.getElementById('import-file').files[0];
+  if (!file) return;
+  button.disabled = true;
+  try {
+    if (file.size > 512 * 1024) throw new Error('Le fichier doit faire moins de 512 Ko.');
+    const payload = JSON.parse(await file.text());
+    if (
+      !(await confirmDialog(
+        'Importer ce fichier et ajouter ses appareils et tags à Spark ? Les doublons seront ignorés.'
+      ))
+    )
+      return;
+    const { stats } = await api.importData(payload);
+    feedback.textContent = `${stats.devices} appareil(s) et ${stats.tags} tag(s) importés ; ${stats.skipped} entrée(s) ignorée(s).`;
+    event.target.reset();
+    await refresh();
+  } catch (err) {
+    feedback.textContent =
+      err instanceof SyntaxError ? 'Ce fichier ne contient pas de JSON valide.' : err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+// Link native browser validation errors to the associated feedback region.
+for (const form of document.querySelectorAll('form')) {
+  form.addEventListener(
+    'invalid',
+    (event) => {
+      const target = event.target;
+      const feedback = (target.getAttribute('aria-describedby') || '')
+        .split(' ')
+        .map((id) => document.getElementById(id))
+        .find((element) => element?.classList.contains('feedback'));
+      if (feedback) feedback.textContent = target.validationMessage;
+      target.setAttribute('aria-invalid', 'true');
+    },
+    true
+  );
+  form.addEventListener('input', (event) => event.target.removeAttribute('aria-invalid'));
+}
 
 setInterval(refreshSchedules, 30_000);
 

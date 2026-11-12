@@ -7,6 +7,8 @@ const PRECACHE_ASSETS = [
   '/style.css',
   '/wake-page.css',
   '/icon.svg',
+  '/icons.svg',
+  '/js/theme.js',
   '/manifest.webmanifest',
   '/js/app.js',
   '/js/api.js',
