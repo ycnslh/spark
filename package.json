@@ -13,21 +13,21 @@
     "format:check": "prettier --check ."
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^13.1.1",
     "express": "^4.21.0",
-    "express-rate-limit": "^7.4.0",
+    "express-rate-limit": "^8.7.4",
     "helmet": "^8.0.0",
     "pino": "^9.5.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "csv-parse": "^5.5.6",
-    "eslint": "^9.39.5",
-    "globals": "^16.5.0",
-    "pino-pretty": "^11.3.0",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "pino-pretty": "^13.2.0",
     "prettier": "^3.3.0",
     "supertest": "^7.0.0"
   }

@@ -14,7 +14,7 @@ Ce projet est à but d'apprentissage. L'utilisateur souhaite comprendre et maît
 
 | Technologie                     | Emplacement                                         | Rôle                                       |
 | ------------------------------- | --------------------------------------------------- | ------------------------------------------ |
-| **Node.js 22**                  | `src/`                                              | Runtime JavaScript côté serveur (CommonJS) |
+| **Node.js 22+**                 | `src/`                                              | Runtime JavaScript côté serveur (CommonJS) |
 | **Express 4**                   | `src/server.js`, `src/routes/`                      | Framework web et API REST                  |
 | **better-sqlite3**              | `src/services/db.js`, `src/services/deviceStore.js` | Base SQLite synchrone                      |
 | **Helmet + express-rate-limit** | `src/middleware/`                                   | Sécurité (CSP, rate limiting)              |
@@ -152,7 +152,7 @@ Quand l'utilisateur pose des questions :
 - `src/routes/serviceWorker.js` expose une fabrique de handler appelée au chargement du serveur : lit `sw.js` et les seuls assets de `PRECACHE_ASSETS`, calcule SHA-256 tronqué à 16 caractères, remplace les marqueurs et sert un snapshot stable avec `Cache-Control: no-cache`. La route `/sw.js` précède `express.static`, après Basic Auth et sous Helmet. Ajouter chaque nouvel asset précaché dans cette liste et redémarrer après modification du contenu.
 - SW : précache `offline.html` et assets statiques seulement, jamais `/` ni `index.html`. Assets en stale-while-revalidate ; navigations réseau d'abord puis page hors ligne en cas d'échec réseau, sans persistance du HTML. Aucune interception de `/api/`, `/wake/`, `/health`, des écritures, des autres origines ou fichiers inconnus. Ne jamais stocker de réponse non-ok ou redirigée, ni d'asset avec query string. Purger uniquement les anciens caches `spark-*` à l'activation. Page hors ligne française sans script/style inline, CSS existant ; réveils et gestion restent dépendants du réseau.
 - Tests `tests/serviceWorker.test.js` : route réelle (auth, CSP, no-cache), version stable, invalidation pour chaque asset au redémarrage, précache, activation et stratégies via une VM Node et un adaptateur CacheStorage. Ce contrôle ne remplace pas un essai d'installation PWA sur téléphone.
-- Docker : base Node 22 épinglée par version/digest multiarchitecture et installation verrouillée `npm ci --omit=dev`. Compose garde le volume `./data` et le réseau host pour WoL ; `read_only: true`, tmpfs `/tmp`, `cap_drop: ALL`, `cap_add: NET_RAW`, `security_opt: no-new-privileges:true`. Vérifier l'accès en écriture de l'utilisateur non-root au volume et le ping ICMP sur chaque hôte ; repli TCP si ICMP indisponible. Le test du lot 6 utilise exclusivement un conteneur bridge isolé et une base temporaire, jamais `docker compose up`.
+- Docker : base Node 26 épinglée par version/digest multiarchitecture et installation verrouillée `npm ci --omit=dev`. Compose garde le volume `./data` et le réseau host pour WoL ; `read_only: true`, tmpfs `/tmp`, `cap_drop: ALL`, `cap_add: NET_RAW`, `security_opt: no-new-privileges:true`. Vérifier l'accès en écriture de l'utilisateur non-root au volume et le ping ICMP sur chaque hôte ; repli TCP si ICMP indisponible. Le test du lot 6 utilise exclusivement un conteneur bridge isolé et une base temporaire, jamais `docker compose up`.
 
 ## Réveils planifiés (lot 7)
 
