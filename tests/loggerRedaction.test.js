@@ -57,3 +57,42 @@ test('development pretty transport preserves the redaction hook under Pino 10', 
   assert.match(result.stdout, /Child/);
   assert.equal(result.stdout.includes('pretty-secret'), false);
 });
+
+test('development logger and SQLite close cleanly in short-lived processes', () => {
+  const script = `
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const path = require('node:path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spark-pretty-sqlite-'));
+    process.env.DB_PATH = path.join(dir, 'test.db');
+    const store = require('./src/services/deviceStore');
+    const { closeDb } = require('./src/services/db');
+    const logger = require('./src/utils/logger');
+    try {
+      for (let i = 0; i < 20; i++) {
+        const device = store.createDevice({ name: 'device-' + i, mac: '02:00:00:00:00:01' });
+        store.recordWake({ deviceId: device.id, triggeredBy: 'test', success: true });
+        store.getHistory(device.id);
+        store.listDevices();
+        store.deleteByMac(device.mac);
+      }
+      logger.info('Completed /wake/pc?token=sqlite-pretty-secret');
+    } finally {
+      closeDb();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  `;
+  for (let i = 0; i < 10; i++) {
+    const result = spawnSync(process.execPath, ['-e', script], {
+      cwd: pathRoot(),
+      encoding: 'utf8',
+      timeout: 10_000,
+      env: { ...process.env, NODE_ENV: 'development', LOG_LEVEL: 'info' },
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null, `run ${i}: ${result.signal}`);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Completed.*REDACTED/);
+    assert.equal(result.stdout.includes('sqlite-pretty-secret'), false);
+  }
+});
