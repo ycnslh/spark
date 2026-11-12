@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "csv-parse": "^5.5.6",
+    "csv-parse": "^6.2.1",
     "eslint": "^10.14.0",
     "globals": "^17.14.0",
     "pino-pretty": "^13.2.0",

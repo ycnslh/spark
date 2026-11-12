@@ -236,3 +236,15 @@ masquer récursivement les query strings et champs sensibles avant sérialisatio
 y compris pour les erreurs et loggers enfants. Aucun changement du format JSON
 applicatif n'est nécessaire ; les tests de redaction et le transport de développement
 sont vérifiés pendant la migration.
+
+## Migration csv-parse 6.2.1
+
+Le [changelog officiel csv-parse](https://github.com/adaltas/node-csv/blob/master/packages/csv-parse/CHANGELOG.md)
+a été lu pour les changements de la version 6. Le script de reprise garde
+`const { parse } = require('csv-parse/sync')` et ses options `columns`,
+`skip_empty_lines`, `trim` : aucune option ni aucun code d'erreur retiré n'y figure.
+Les tests `csvMigration` exécutent le vrai script sur des CSV temporaires
+(champs entre guillemets, CRLF, doublons, MAC invalides et fichier malformé), puis
+vérifient SQLite et l'idempotence. `csv-parse` reste une dépendance de développement :
+installer les dépendances dev pour `npm run migrate`, avant la construction de l'image
+production qui utilise `npm ci --omit=dev`.
